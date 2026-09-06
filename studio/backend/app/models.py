@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 
 
 Risk = Literal["read", "write", "admin", "destructive"]
+ResponseMode = Literal["sync", "fabric-lro"]
 
 
 class ParameterSpec(BaseModel):
@@ -26,6 +27,7 @@ class Capability(BaseModel):
     description: str = ""
     source_path: str | None = None
     generated: bool = False
+    response_mode: ResponseMode = "sync"
     parameters: list[str] = Field(default_factory=list)
     parameter_specs: list[ParameterSpec] = Field(default_factory=list)
 
@@ -62,3 +64,5 @@ class SessionStatus(BaseModel):
     mode: Literal["read-only"] = "read-only"
     transport: str = "MicrosoftFabricMgmtMCPServer/core/powershell_session.py"
     feature_provider: str = "MicrosoftFabricMgmt"
+    connected: bool = False
+    tenant_id: str | None = None
