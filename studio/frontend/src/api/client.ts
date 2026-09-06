@@ -1,5 +1,7 @@
 export type Risk = 'read' | 'write' | 'admin' | 'destructive';
 export type ResponseMode = 'sync' | 'fabric-lro';
+export type ExecutionPolicy = 'read' | 'guarded-write' | 'blocked';
+export type MutationStatus = 'planned' | 'validated' | 'executing' | 'executed' | 'failed' | 'expired';
 
 export type ParameterSpec = {
   name: string;
@@ -18,6 +20,10 @@ export type Capability = {
   source: string;
   risk: Risk;
   response_mode?: ResponseMode;
+  execution_policy?: ExecutionPolicy;
+  supports_whatif?: boolean;
+  verification_capability_id?: string;
+  verification_parameter_map?: Record<string, string>;
   command?: string;
   endpoint?: string;
   description: string;
@@ -47,8 +53,37 @@ export type ExecutionResponse = {
   result: Record<string, unknown>;
 };
 
+export type MutationPlan = {
+  plan_id: string;
+  capability_id: string;
+  capability_title: string;
+  provider: string;
+  risk: Risk;
+  tenant_id: string;
+  parameters: Record<string, unknown>;
+  rendered_command: string;
+  validation_command?: string;
+  supports_validation: boolean;
+  confirmation_text: string;
+  digest: string;
+  created_at: string;
+  expires_at: string;
+  status: MutationStatus;
+};
+
+export type MutationValidationResponse = {
+  plan: MutationPlan;
+  result: Record<string, unknown>;
+};
+
+export type MutationExecutionResponse = {
+  plan: MutationPlan;
+  result: Record<string, unknown>;
+  verification?: Record<string, unknown>;
+};
+
 export type SessionStatus = {
-  mode: 'read-only';
+  mode: 'guarded-writes';
   transport: string;
   feature_provider: string;
   connected: boolean;
@@ -161,6 +196,30 @@ export function previewCapability(capabilityId: string, parameters: Record<strin
   return request<ExecutionPreview>(`/api/capabilities/${encodeURIComponent(capabilityId)}/preview`, {
     method: 'POST',
     body: JSON.stringify({ parameters }),
+  });
+}
+
+export function createMutationPlan(capabilityId: string, parameters: Record<string, unknown> = {}) {
+  return request<MutationPlan>(`/api/capabilities/${encodeURIComponent(capabilityId)}/mutations/plan`, {
+    method: 'POST',
+    body: JSON.stringify({ parameters }),
+  });
+}
+
+export function getMutationPlans() {
+  return request<MutationPlan[]>('/api/mutations');
+}
+
+export function validateMutation(planId: string) {
+  return request<MutationValidationResponse>(`/api/mutations/${encodeURIComponent(planId)}/validate`, {
+    method: 'POST',
+  });
+}
+
+export function executeMutation(planId: string, confirmation: string) {
+  return request<MutationExecutionResponse>(`/api/mutations/${encodeURIComponent(planId)}/execute`, {
+    method: 'POST',
+    body: JSON.stringify({ confirmation }),
   });
 }
 
