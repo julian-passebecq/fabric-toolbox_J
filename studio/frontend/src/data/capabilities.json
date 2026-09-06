@@ -22,6 +22,36 @@
     "description": "Inspect workspace role assignments through the upstream MicrosoftFabricMgmt module."
   },
   {
+    "id": "ps-workspace-new-fabricworkspace",
+    "title": "Create workspace",
+    "category": "Workspace",
+    "provider": "MicrosoftFabricMgmt",
+    "source": "microsoft/fabric-toolbox",
+    "risk": "write",
+    "execution_policy": "guarded-write",
+    "supports_whatif": true,
+    "command": "New-FabricWorkspace",
+    "source_path": "tools/MicrosoftFabricMgmt/source/Public/Workspace/New-FabricWorkspace.ps1",
+    "verification_capability_id": "ps-workspace-get-fabricworkspace",
+    "verification_parameter_map": {"WorkspaceName": "WorkspaceName"},
+    "description": "Create a Fabric workspace through the upstream cmdlet. Studio requires an expiring mutation plan, upstream -WhatIf validation and explicit typed approval before execution."
+  },
+  {
+    "id": "ps-workspace-update-fabricworkspace",
+    "title": "Update workspace metadata",
+    "category": "Workspace",
+    "provider": "MicrosoftFabricMgmt",
+    "source": "microsoft/fabric-toolbox",
+    "risk": "write",
+    "execution_policy": "guarded-write",
+    "supports_whatif": true,
+    "command": "Update-FabricWorkspace",
+    "source_path": "tools/MicrosoftFabricMgmt/source/Public/Workspace/Update-FabricWorkspace.ps1",
+    "verification_capability_id": "ps-workspace-get-fabricworkspace",
+    "verification_parameter_map": {"WorkspaceId": "WorkspaceId"},
+    "description": "Update workspace name and/or description through the upstream cmdlet. Studio requires an expiring mutation plan, upstream -WhatIf validation and explicit typed approval before execution."
+  },
+  {
     "id": "ps-capacity-get-fabriccapacity",
     "title": "List capacities",
     "category": "Capacity",
