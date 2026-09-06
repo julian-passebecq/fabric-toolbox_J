@@ -10,6 +10,7 @@ from .models import (
     PreviewRequest,
     SessionStatus,
 )
+from .providers.fabric_rest import build_rest_get_command, execute_rest_read
 from .providers.microsoftfabricmgmt import (
     ProviderUnavailable,
     UnsafeOperation,
@@ -20,8 +21,8 @@ from .sources import load_source_registry
 
 app = FastAPI(
     title="Fabric Ops Studio API",
-    version="0.2.0",
-    description="Thin read-only operations layer over Fabric Toolbox providers.",
+    version="0.3.0",
+    description="Thin read-only operations layer over Fabric Toolbox and registered Fabric REST providers.",
 )
 
 
@@ -30,6 +31,22 @@ def _capability_or_404(capability_id: str) -> Capability:
         if item.id == capability_id:
             return item
     raise HTTPException(status_code=404, detail="Capability not found")
+
+
+def _build_preview_command(item: Capability, parameters: dict) -> tuple[str, str]:
+    if item.provider == "MicrosoftFabricMgmt":
+        return build_read_command(item, parameters), "tools/MicrosoftFabricMgmtMCPServer/core/powershell_session.py"
+    if item.provider == "Fabric REST API":
+        return build_rest_get_command(item, parameters), "MicrosoftFabricMgmt.Invoke-FabricAPIRequest via upstream PowerShell session"
+    raise UnsafeOperation(f"Provider is not executable in this milestone: {item.provider}")
+
+
+def _execute_read(item: Capability, parameters: dict) -> dict:
+    if item.provider == "MicrosoftFabricMgmt":
+        return runtime.execute_read(item, parameters)
+    if item.provider == "Fabric REST API":
+        return execute_rest_read(item, parameters)
+    raise UnsafeOperation(f"Provider is not executable in this milestone: {item.provider}")
 
 
 @app.get("/api/health")
@@ -75,21 +92,17 @@ def preview(capability_id: str, request: PreviewRequest | None = None) -> Execut
     item = _capability_or_404(capability_id)
     parameters = request.parameters if request else {}
 
-    if item.provider == "MicrosoftFabricMgmt" and item.risk == "read" and item.command:
-        try:
-            rendered = build_read_command(item, parameters)
-        except (UnsafeOperation, ValueError) as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    try:
+        rendered, transport = _build_preview_command(item, parameters)
+    except (UnsafeOperation, ValueError) as exc:
         return ExecutionPreview(
             capability_id=item.id,
             provider=item.provider,
             risk=item.risk,
             command=item.command,
             endpoint=item.endpoint,
-            rendered_command=rendered,
-            transport="tools/MicrosoftFabricMgmtMCPServer/core/powershell_session.py",
-            executable=True,
-            reason="Read-only MicrosoftFabricMgmt operation; execution is enabled after interactive Fabric authentication.",
+            executable=False,
+            reason=str(exc),
         )
 
     return ExecutionPreview(
@@ -98,8 +111,10 @@ def preview(capability_id: str, request: PreviewRequest | None = None) -> Execut
         risk=item.risk,
         command=item.command,
         endpoint=item.endpoint,
-        executable=False,
-        reason="Only read-only MicrosoftFabricMgmt capabilities are executable in this milestone.",
+        rendered_command=rendered,
+        transport=transport,
+        executable=True,
+        reason="Registered read-only operation; execution is enabled after interactive Fabric authentication.",
     )
 
 
@@ -109,8 +124,8 @@ def execute(capability_id: str, request: PreviewRequest | None = None) -> Execut
     parameters = request.parameters if request else {}
 
     try:
-        rendered = build_read_command(item, parameters)
-        result = runtime.execute_read(item, parameters)
+        rendered, transport = _build_preview_command(item, parameters)
+        result = _execute_read(item, parameters)
     except (UnsafeOperation, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ProviderUnavailable as exc:
@@ -125,6 +140,8 @@ def execute(capability_id: str, request: PreviewRequest | None = None) -> Execut
             "provider": item.provider,
             "source": item.source,
             "source_path": item.source_path,
+            "endpoint": item.endpoint,
+            "transport": transport,
             "risk": item.risk,
             "rendered_command": rendered,
             "parameters": parameters,
