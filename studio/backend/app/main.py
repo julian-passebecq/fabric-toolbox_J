@@ -16,6 +16,7 @@ from .providers.microsoftfabricmgmt import (
     build_read_command,
     runtime,
 )
+from .sources import load_source_registry
 
 app = FastAPI(
     title="Fabric Ops Studio API",
@@ -143,6 +144,11 @@ def execute(capability_id: str, request: PreviewRequest | None = None) -> Execut
 @app.get("/api/activity")
 def activity(limit: int = 200) -> list[dict]:
     return read_activity(limit)
+
+
+@app.get("/api/sources")
+def sources() -> dict:
+    return load_source_registry()
 
 
 def run() -> None:
