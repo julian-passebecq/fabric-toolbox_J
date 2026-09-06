@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 
 from .activity import append_activity, read_activity
 from .catalog import combined_catalog
+from .diagnostics import collect_diagnostics
 from .models import (
     Capability,
     ConnectRequest,
@@ -18,10 +19,11 @@ from .providers.microsoftfabricmgmt import (
     runtime,
 )
 from .sources import load_source_registry
+from .specialized_tools import list_specialized_tools
 
 app = FastAPI(
     title="Fabric Ops Studio API",
-    version="0.3.0",
+    version="0.4.0",
     description="Thin read-only operations layer over Fabric Toolbox and registered Fabric REST providers.",
 )
 
@@ -56,7 +58,7 @@ def health() -> dict[str, str]:
 
 @app.get("/api/session", response_model=SessionStatus)
 def session_status() -> SessionStatus:
-    return SessionStatus()
+    return runtime.status()
 
 
 @app.post("/api/session/connect")
@@ -105,6 +107,7 @@ def preview(capability_id: str, request: PreviewRequest | None = None) -> Execut
             reason=str(exc),
         )
 
+    mode_note = " Fabric LRO completion is delegated to MicrosoftFabricMgmt." if item.response_mode == "fabric-lro" else ""
     return ExecutionPreview(
         capability_id=item.id,
         provider=item.provider,
@@ -114,7 +117,7 @@ def preview(capability_id: str, request: PreviewRequest | None = None) -> Execut
         rendered_command=rendered,
         transport=transport,
         executable=True,
-        reason="Registered read-only operation; execution is enabled after interactive Fabric authentication.",
+        reason="Registered read-only operation; execution is enabled after interactive Fabric authentication." + mode_note,
     )
 
 
@@ -122,6 +125,9 @@ def preview(capability_id: str, request: PreviewRequest | None = None) -> Execut
 def execute(capability_id: str, request: PreviewRequest | None = None) -> ExecutionResult:
     item = _capability_or_404(capability_id)
     parameters = request.parameters if request else {}
+
+    if not runtime.status().connected:
+        raise HTTPException(status_code=409, detail="Connect to a Fabric tenant before executing operations")
 
     try:
         rendered, transport = _build_preview_command(item, parameters)
@@ -141,6 +147,7 @@ def execute(capability_id: str, request: PreviewRequest | None = None) -> Execut
             "source": item.source,
             "source_path": item.source_path,
             "endpoint": item.endpoint,
+            "response_mode": item.response_mode,
             "transport": transport,
             "risk": item.risk,
             "rendered_command": rendered,
@@ -166,6 +173,16 @@ def activity(limit: int = 200) -> list[dict]:
 @app.get("/api/sources")
 def sources() -> dict:
     return load_source_registry()
+
+
+@app.get("/api/tools")
+def tools() -> list[dict]:
+    return list_specialized_tools()
+
+
+@app.get("/api/diagnostics")
+def diagnostics() -> dict:
+    return collect_diagnostics()
 
 
 def run() -> None:
