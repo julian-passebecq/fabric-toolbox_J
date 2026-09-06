@@ -15,7 +15,7 @@ import {
 import {
   AppsList24Regular,
   BuildingFactory24Regular,
-  CloudDatabase24Regular,
+  CloudDatabaseRegular,
   DataUsageSettings24Regular,
   History24Regular,
   Key24Regular,
@@ -35,7 +35,7 @@ import { SourcesPage } from './pages/SourcesPage';
 const nav = [
   ['Overview', AppsList24Regular],
   ['Workspaces', BuildingFactory24Regular],
-  ['Items', CloudDatabase24Regular],
+  ['Items', CloudDatabaseRegular],
   ['Runs & Schedules', Timeline24Regular],
   ['Capacities', DataUsageSettings24Regular],
   ['Connections', PlugConnected24Regular],
