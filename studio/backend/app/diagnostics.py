@@ -35,6 +35,9 @@ def collect_diagnostics() -> dict:
     catalog = combined_catalog()
     providers = Counter(item.provider for item in catalog)
     risks = Counter(item.risk for item in catalog)
+    policies = Counter(item.execution_policy or "unset" for item in catalog)
+    guarded = [item for item in catalog if item.execution_policy == "guarded-write"]
+    guarded_whatif = [item for item in guarded if item.supports_whatif]
 
     checks = [
         _check("PowerShell 7", bool(pwsh), pwsh or "pwsh was not found on PATH"),
@@ -44,6 +47,11 @@ def collect_diagnostics() -> dict:
             "Built MicrosoftFabricMgmt module",
             bool(built_manifests),
             str(built_manifests[-1]) if built_manifests else "No built MicrosoftFabricMgmt.psd1 found",
+        ),
+        _check(
+            "Guarded write allowlist",
+            bool(guarded) and len(guarded) == len(guarded_whatif),
+            f"{len(guarded)} guarded capabilities; {len(guarded_whatif)} expose upstream -WhatIf validation",
         ),
         _check("Azure CLI", bool(az), az or "az was not found on PATH; only required by some specialized tools", required=False),
         _check("Fabric Security Audit", security_tool.is_file(), str(security_tool), required=False),
@@ -61,6 +69,7 @@ def collect_diagnostics() -> dict:
             "total": len(catalog),
             "providers": dict(sorted(providers.items())),
             "risks": dict(sorted(risks.items())),
+            "policies": dict(sorted(policies.items())),
         },
         "checks": checks,
     }
