@@ -4,11 +4,12 @@ product: Fabric Ops Studio
 principles:
   - Prefer upstream MicrosoftFabricMgmt PowerShell commands.
   - Prefer official Fabric REST APIs when PowerShell coverage is missing.
-  - Wrap specialized Fabric Toolbox tools instead of copying their internals.
+  - Wrap or expose specialized Fabric Toolbox tools instead of copying their internals.
   - Keep Studio-owned orchestration thin and explicit.
   - Every executable capability must declare provenance and risk.
   - Distinguish the feature provider from the execution transport.
   - Fabric REST capabilities are registered from verified official endpoints, never accepted as arbitrary URLs.
+  - Delegate Fabric long-running-operation polling to MicrosoftFabricMgmt rather than implementing a second poller.
 
 sources:
   - id: microsoftfabricmgmt
@@ -25,6 +26,7 @@ sources:
       - capacities
       - connections
       - workspaces
+      - workspace-role-assignments
       - items
       - pipelines
       - deployment-pipelines
@@ -55,16 +57,21 @@ sources:
     integration: registered-endpoints-via-microsoftfabricmgmt
     execution_transport: MicrosoftFabricMgmt.Invoke-FabricAPIRequest
     authentication_transport: MicrosoftFabricMgmt.Get-FabricAPIHeaders
+    lro_transport: MicrosoftFabricMgmt.Invoke-FabricAPIRequest -WaitForCompletion -> Get-FabricLongRunningOperation -> Get-FabricLongRunningOperationResult
     update_strategy: verify-official-api-then-update-registry
     role: official-api-feature-provider
     capability_scope:
       - generic-items
+      - item-details
+      - item-connections
       - job-instances
       - schedules
+      - workspace-git-status
     safety:
       current_methods:
         - GET
       arbitrary_urls: false
+      lro_implementation: upstream-module
     studio_modifies_upstream: false
 
   - id: fabric-security-audit
@@ -73,9 +80,11 @@ sources:
     owner: microsoft
     repository: microsoft/fabric-toolbox
     local_path: tools/fabric-security-audit
-    integration: subprocess-wrapper
+    integration: catalogued-upstream-workflow
+    execution_status: preview-only
     update_strategy: merge-upstream-main
     role: specialized-tool
+    note: Studio shows prerequisites and the upstream entrypoint. Generic execution is intentionally disabled because the workflow spans Fabric, Graph and SQL security and creates output bundles.
     studio_modifies_upstream: false
 
   - id: fabric-assessment-tool
@@ -84,9 +93,11 @@ sources:
     owner: microsoft
     repository: microsoft/fabric-toolbox
     local_path: tools/fabric-assessment-tool
-    integration: python-package-wrapper
+    integration: catalogued-upstream-workflow
+    execution_status: preview-only
     update_strategy: merge-upstream-main
     role: specialized-tool
+    note: Studio exposes the fat assessment workflow but does not duplicate its Python package, Azure CLI or Fabric Notebook authentication lifecycle.
     studio_modifies_upstream: false
 
   - id: lineage-extractor
@@ -95,9 +106,11 @@ sources:
     owner: microsoft
     repository: microsoft/fabric-toolbox
     local_path: tools/Lineage_Extractor
-    integration: notebook-tool-wrapper
+    integration: catalogued-upstream-workflow
+    execution_status: external-notebook
     update_strategy: merge-upstream-main
     role: specialized-tool
+    note: The upstream implementation is a Fabric notebook workflow and can publish lineage to Purview; Studio exposes instructions and provenance rather than running notebook cells locally.
     studio_modifies_upstream: false
 
 excluded_from_product_surface:
