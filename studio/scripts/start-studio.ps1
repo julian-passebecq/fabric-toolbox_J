@@ -10,7 +10,7 @@ $StudioRoot = Split-Path -Parent $PSScriptRoot
 $Backend = Join-Path $StudioRoot 'backend'
 $Frontend = Join-Path $StudioRoot 'frontend'
 $BackendVenv = Join-Path $Backend '.venv'
-$FrontendModules = Join-Path $Frontend 'node_modules'
+$StudioModules = Join-Path $StudioRoot 'node_modules'
 $UiUrl = 'http://127.0.0.1:5173'
 $ApiUrl = 'http://127.0.0.1:8765'
 
@@ -37,6 +37,9 @@ $null = Require-Command -Name 'npm' -InstallHint 'Install npm with Node.js.'
 if (-not (Test-Path $Backend)) {
     throw "Backend directory was not found: $Backend"
 }
+if (-not (Test-Path (Join-Path $StudioRoot 'package.json'))) {
+    throw "Studio npm workspace package.json was not found: $StudioRoot"
+}
 if (-not (Test-Path (Join-Path $Frontend 'package.json'))) {
     throw "Frontend package.json was not found: $Frontend"
 }
@@ -55,9 +58,9 @@ if (-not $SkipInstall) {
     Write-Host 'Installing/updating Fabric Ops Studio backend...'
     & $Python -m pip install -e $Backend
 
-    if (-not (Test-Path $FrontendModules)) {
-        Write-Host 'Installing frontend dependencies...'
-        Push-Location $Frontend
+    if (-not (Test-Path $StudioModules)) {
+        Write-Host 'Installing Studio frontend workspace dependencies...'
+        Push-Location $StudioRoot
         try {
             npm install
         }
@@ -66,8 +69,8 @@ if (-not $SkipInstall) {
         }
     }
 }
-elseif (-not (Test-Path $FrontendModules)) {
-    throw "-SkipInstall was used but frontend dependencies are missing: $FrontendModules"
+elseif (-not (Test-Path $StudioModules)) {
+    throw "-SkipInstall was used but Studio npm workspace dependencies are missing: $StudioModules"
 }
 
 $escapedBackend = $Backend.Replace("'", "''")
