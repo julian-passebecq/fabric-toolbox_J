@@ -44,11 +44,9 @@ def _ps_literal(value: Any) -> str:
     raise ValueError(f"Unsupported PowerShell parameter type: {type(value).__name__}")
 
 
-def build_read_command(capability: Capability, parameters: dict[str, Any] | None = None) -> str:
+def _command_invocation(capability: Capability, parameters: dict[str, Any] | None = None) -> str:
     if capability.provider != "MicrosoftFabricMgmt":
         raise UnsafeOperation("Capability is not provided by MicrosoftFabricMgmt")
-    if capability.risk != "read":
-        raise UnsafeOperation(f"Only read-only capabilities are enabled; risk={capability.risk}")
     if not capability.command:
         raise UnsafeOperation("Capability has no PowerShell command")
 
@@ -70,7 +68,40 @@ def build_read_command(capability: Capability, parameters: dict[str, Any] | None
             continue
         args.append(f"-{key} {_ps_literal(value)}")
 
-    command = " ".join(["&", _ps_literal(capability.command), *args])
+    return " ".join(["&", _ps_literal(capability.command), *args])
+
+
+def build_read_command(capability: Capability, parameters: dict[str, Any] | None = None) -> str:
+    if capability.risk != "read" or capability.execution_policy != "read":
+        raise UnsafeOperation(
+            f"Only registered read capabilities are enabled on the read executor; risk={capability.risk}, policy={capability.execution_policy}"
+        )
+    command = _command_invocation(capability, parameters)
+    return f"{command} | ConvertTo-Json -Depth 20 -Compress"
+
+
+def build_guarded_write_command(
+    capability: Capability,
+    parameters: dict[str, Any] | None = None,
+    *,
+    what_if: bool = False,
+) -> str:
+    if capability.risk != "write" or capability.execution_policy != "guarded-write":
+        raise UnsafeOperation(
+            f"Capability is not allowlisted for guarded writes; risk={capability.risk}, policy={capability.execution_policy}"
+        )
+    command = _command_invocation(capability, parameters)
+
+    if what_if:
+        if not capability.supports_whatif:
+            raise UnsafeOperation(f"{capability.command} is not registered as supporting -WhatIf")
+        # Capture all PowerShell streams so the persistent session still receives one JSON document.
+        return (
+            f"$studioWhatIf = ({command} -WhatIf *>&1 | Out-String).Trim(); "
+            "[PSCustomObject]@{ success = $true; mode = 'what-if'; output = $studioWhatIf } "
+            "| ConvertTo-Json -Depth 20 -Compress"
+        )
+
     return f"{command} | ConvertTo-Json -Depth 20 -Compress"
 
 
@@ -127,6 +158,12 @@ class MicrosoftFabricMgmtRuntime:
 
     def execute_read(self, capability: Capability, parameters: dict[str, Any] | None = None) -> dict[str, Any]:
         return self.run_json(build_read_command(capability, parameters))
+
+    def execute_guarded_write(self, capability: Capability, parameters: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self.run_json(build_guarded_write_command(capability, parameters))
+
+    def validate_guarded_write(self, capability: Capability, parameters: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self.run_json(build_guarded_write_command(capability, parameters, what_if=True))
 
     def run_json(self, command: str) -> dict[str, Any]:
         """Execute a pre-validated command through the upstream persistent PowerShell session."""
