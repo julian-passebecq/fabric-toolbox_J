@@ -33,6 +33,55 @@
     "description": "List or retrieve Fabric connections through the upstream MicrosoftFabricMgmt module."
   },
   {
+    "id": "rest-items-list",
+    "title": "List workspace items",
+    "category": "Items",
+    "provider": "Fabric REST API",
+    "source": "Microsoft Fabric REST API",
+    "risk": "read",
+    "endpoint": "GET /v1/workspaces/{workspaceId}/items",
+    "parameters": ["workspaceId", "type", "rootFolderId"],
+    "parameter_specs": [
+      {"name": "workspaceId", "type": "string", "mandatory": true, "is_switch": false, "description": "Fabric workspace ID.", "allowed_values": []},
+      {"name": "type", "type": "string", "mandatory": false, "is_switch": false, "description": "Optional Fabric item type filter.", "allowed_values": []},
+      {"name": "rootFolderId", "type": "string", "mandatory": false, "is_switch": false, "description": "Optional root folder ID.", "allowed_values": []}
+    ],
+    "description": "List items in a workspace using the official Fabric v1 Items API. Execution reuses MicrosoftFabricMgmt Invoke-FabricAPIRequest."
+  },
+  {
+    "id": "rest-job-instances-list",
+    "title": "List item job instances",
+    "category": "Runs & Schedules",
+    "provider": "Fabric REST API",
+    "source": "Microsoft Fabric REST API",
+    "risk": "read",
+    "endpoint": "GET /v1/workspaces/{workspaceId}/items/{itemId}/jobs/instances",
+    "parameters": ["workspaceId", "itemId", "continuationToken"],
+    "parameter_specs": [
+      {"name": "workspaceId", "type": "string", "mandatory": true, "is_switch": false, "description": "Fabric workspace ID.", "allowed_values": []},
+      {"name": "itemId", "type": "string", "mandatory": true, "is_switch": false, "description": "Fabric item ID.", "allowed_values": []},
+      {"name": "continuationToken", "type": "string", "mandatory": false, "is_switch": false, "description": "Optional continuation token for another result page.", "allowed_values": []}
+    ],
+    "description": "List recent and active job instances for a Fabric item using the official Job Scheduler API."
+  },
+  {
+    "id": "rest-schedules-list",
+    "title": "List item schedules",
+    "category": "Runs & Schedules",
+    "provider": "Fabric REST API",
+    "source": "Microsoft Fabric REST API",
+    "risk": "read",
+    "endpoint": "GET /v1/workspaces/{workspaceId}/items/{itemId}/jobs/{jobType}/schedules",
+    "parameters": ["workspaceId", "itemId", "jobType", "continuationToken"],
+    "parameter_specs": [
+      {"name": "workspaceId", "type": "string", "mandatory": true, "is_switch": false, "description": "Fabric workspace ID.", "allowed_values": []},
+      {"name": "itemId", "type": "string", "mandatory": true, "is_switch": false, "description": "Fabric item ID.", "allowed_values": []},
+      {"name": "jobType", "type": "string", "mandatory": true, "is_switch": false, "description": "Job type exposed by the Fabric item.", "allowed_values": []},
+      {"name": "continuationToken", "type": "string", "mandatory": false, "is_switch": false, "description": "Optional continuation token for another result page.", "allowed_values": []}
+    ],
+    "description": "List schedules for a Fabric item/job type using the official Job Scheduler API."
+  },
+  {
     "id": "rest-sqldatabase-create",
     "title": "Create SQL database",
     "category": "SQL Database",
