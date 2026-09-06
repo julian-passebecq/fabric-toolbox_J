@@ -60,6 +60,15 @@ class MutationBroker:
         if not session.tenant_id or session.tenant_id != plan.tenant_id:
             raise UnsafeOperation("Mutation plan belongs to a different Fabric tenant/session")
 
+    @staticmethod
+    def _validate_parameters(capability: Capability, parameters: dict[str, Any]) -> None:
+        if capability.required_any_of and not any(
+            name in parameters and parameters[name] not in (None, "")
+            for name in capability.required_any_of
+        ):
+            joined = ", ".join(capability.required_any_of)
+            raise ValueError(f"At least one of these parameters is required: {joined}")
+
     def create_plan(self, capability: Capability, parameters: dict[str, Any]) -> MutationPlan:
         session = runtime.status()
         if not session.connected or not session.tenant_id:
@@ -69,6 +78,7 @@ class MutationBroker:
         if capability.risk != "write" or capability.execution_policy != "guarded-write":
             raise UnsafeOperation("Capability is not explicitly allowlisted for guarded writes")
 
+        self._validate_parameters(capability, parameters)
         rendered = build_guarded_write_command(capability, parameters)
         validation_command = (
             build_guarded_write_command(capability, parameters, what_if=True)
