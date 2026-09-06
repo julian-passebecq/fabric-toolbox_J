@@ -33,6 +33,7 @@ class Capability(BaseModel):
     response_mode: ResponseMode = "sync"
     execution_policy: ExecutionPolicy | None = None
     supports_whatif: bool = False
+    required_any_of: list[str] = Field(default_factory=list)
     verification_capability_id: str | None = None
     verification_parameter_map: dict[str, str] = Field(default_factory=dict)
     parameters: list[str] = Field(default_factory=list)
