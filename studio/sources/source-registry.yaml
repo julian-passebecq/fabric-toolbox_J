@@ -8,6 +8,7 @@ principles:
   - Keep Studio-owned orchestration thin and explicit.
   - Every executable capability must declare provenance and risk.
   - Distinguish the feature provider from the execution transport.
+  - Fabric REST capabilities are registered from verified official endpoints, never accepted as arbitrary URLs.
 
 sources:
   - id: microsoftfabricmgmt
@@ -44,16 +45,26 @@ sources:
     update_strategy: merge-upstream-main
     role: execution-transport-only
     feature_source: false
-    note: Studio reuses the upstream session/process transport but capability provenance remains MicrosoftFabricMgmt.
+    note: Studio reuses the upstream session/process transport but capability provenance remains the originating cmdlet or official Fabric REST API.
     studio_modifies_upstream: false
 
   - id: fabric-rest
     name: Microsoft Fabric REST API
     origin: microsoft-official-api
     owner: microsoft
-    integration: direct-http-via-backend
-    update_strategy: api-capability-registry-review
-    role: fallback-and-new-api
+    integration: registered-endpoints-via-microsoftfabricmgmt
+    execution_transport: MicrosoftFabricMgmt.Invoke-FabricAPIRequest
+    authentication_transport: MicrosoftFabricMgmt.Get-FabricAPIHeaders
+    update_strategy: verify-official-api-then-update-registry
+    role: official-api-feature-provider
+    capability_scope:
+      - generic-items
+      - job-instances
+      - schedules
+    safety:
+      current_methods:
+        - GET
+      arbitrary_urls: false
     studio_modifies_upstream: false
 
   - id: fabric-security-audit
