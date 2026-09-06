@@ -1,5 +1,29 @@
 # Studio changelog
 
+## 0.6.0
+
+- Added filtering, click-to-sort columns and CSV export to the reusable result viewer while retaining raw JSON, copy and JSON download.
+- Added durable mutation history to Change Plans by reconstructing mutation events from the existing redacted activity log. Live approval plans remain memory-only and are never restored after restart.
+- Added capability compatibility diagnostics for duplicate IDs, broken verification references, guarded-write policy inconsistencies, malformed registered Fabric REST endpoints and missing repository-local source paths.
+- Added regression tests for compatibility failures and corrected diagnostics expectations for guarded-write runtime mode.
+- Added browser-local operation favorites and per-page last-operation memory without storing credentials or approval state.
+- Added tenant-scoped recent workspace selections using only workspace ID, display name and last-used timestamp in local storage.
+- Added Activity Log search plus filtered JSON and JSONL export.
+- Kept the guarded-write allowlist unchanged; this pass improves operator ergonomics and auditability rather than widening mutation authority.
+
+## 0.5.0
+
+- Added an explicit `guarded-write` execution policy while keeping unreviewed writes/admin/destructive capabilities blocked.
+- Added tenant-bound mutation plans with ten-minute expiry and single-use lifecycle states.
+- Bound each plan to capability ID, tenant, exact parameters and rendered command using SHA-256.
+- Added typed confirmation text and required validation before execution where the upstream cmdlet exposes `SupportsShouldProcess` / `-WhatIf`.
+- Added post-execution read-back verification through existing read capabilities where configured.
+- Added mutation planning, validation and execution events to the redacted activity log.
+- Added the Change Plans UI for current backend-session plans.
+- Enabled only two reviewed workspace mutations: create workspace and update workspace name/description through upstream MicrosoftFabricMgmt cmdlets.
+- Added parameter guardrails for workspace updates so at least name or description must be supplied.
+- Left role assignment, capacity assignment, item lifecycle, job/schedule writes, Git writes and destructive operations blocked.
+
 ## 0.4.0
 
 - Added declarative Fabric long-running-operation support for registered REST reads.
