@@ -88,7 +88,8 @@ export function CommandWorkbench({ capability, connected, onClose }: CommandWork
     setError('');
   }, [capability.id]);
 
-  const executable = capability.provider === 'MicrosoftFabricMgmt' && capability.risk === 'read';
+  const executableProvider = capability.provider === 'MicrosoftFabricMgmt' || capability.provider === 'Fabric REST API';
+  const executable = executableProvider && capability.risk === 'read';
 
   const requestParameters = useMemo(() => {
     const params: Record<string, unknown> = {};
@@ -148,9 +149,10 @@ export function CommandWorkbench({ capability, connected, onClose }: CommandWork
         provider: response.provider,
         risk: response.risk,
         command: capability.command,
+        endpoint: capability.endpoint,
         rendered_command: response.rendered_command,
         executable: true,
-        reason: 'Executed as a read-only MicrosoftFabricMgmt operation.',
+        reason: `Executed as a registered read-only ${capability.provider} operation.`,
       });
       setResult(response.result);
     } catch (err) {
@@ -161,7 +163,7 @@ export function CommandWorkbench({ capability, connected, onClose }: CommandWork
   }
 
   async function copyRendered() {
-    const command = preview?.rendered_command ?? capability.command;
+    const command = preview?.rendered_command ?? capability.command ?? capability.endpoint;
     if (command) await navigator.clipboard.writeText(command);
   }
 
@@ -184,6 +186,7 @@ export function CommandWorkbench({ capability, connected, onClose }: CommandWork
 
       {capability.source_path && <Text block className={styles.muted}>{capability.source_path}</Text>}
       {capability.command && <code className={styles.code}>{capability.command}</code>}
+      {capability.endpoint && <code className={styles.code}>{capability.endpoint}</code>}
 
       {(capability.parameter_specs ?? []).length > 0 && (
         <div className={styles.form}>
@@ -207,7 +210,7 @@ export function CommandWorkbench({ capability, connected, onClose }: CommandWork
                   </select>
                 </Field>
               ) : (
-                <Field label={`${spec.name}${spec.mandatory ? ' *' : ''}`} hint={spec.description ?? `PowerShell type: ${spec.type}`}>
+                <Field label={`${spec.name}${spec.mandatory ? ' *' : ''}`} hint={spec.description ?? `Parameter type: ${spec.type}`}>
                   <Input
                     value={String(values[spec.name] ?? '')}
                     onChange={(_, data) => setValues((current) => ({ ...current, [spec.name]: data.value }))}
@@ -221,7 +224,7 @@ export function CommandWorkbench({ capability, connected, onClose }: CommandWork
 
       {!executable && (
         <Card>
-          <Text>This command is catalogued for reference but is blocked by the current read-only execution policy.</Text>
+          <Text>This capability is catalogued for reference but is blocked by the current read-only execution policy.</Text>
         </Card>
       )}
 
@@ -230,7 +233,7 @@ export function CommandWorkbench({ capability, connected, onClose }: CommandWork
         <Button appearance="primary" disabled={!executable || !connected || busy !== null} onClick={doExecute}>
           {busy === 'execute' ? 'Running…' : 'Run read-only'}
         </Button>
-        <Button disabled={!preview?.rendered_command && !capability.command} onClick={copyRendered}>Copy command</Button>
+        <Button disabled={!preview?.rendered_command && !capability.command && !capability.endpoint} onClick={copyRendered}>Copy</Button>
       </div>
 
       {!connected && executable && <Text block className={styles.muted}>Connect to a Fabric tenant before execution. Preview remains available offline.</Text>}
