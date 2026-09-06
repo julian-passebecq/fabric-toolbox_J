@@ -108,6 +108,7 @@ export function App() {
   const categories = useMemo(() => new Set(catalog.map((item) => item.category)).size, [catalog]);
   const workspaceCapability = catalog.find((item) => item.id === 'ps-workspace-get-fabricworkspace');
   const capacityCapability = catalog.find((item) => item.id === 'ps-capacity-get-fabriccapacity');
+  const connectionCapability = catalog.find((item) => item.id === 'ps-connections-get-fabricconnection');
 
   async function copyCommand(cap: Capability) {
     if (!cap.command) return;
@@ -189,6 +190,7 @@ export function App() {
         <div className={styles.cards}>
           <Card><CardHeader header={<Subtitle1>Workspace inventory</Subtitle1>} description="Run Get-FabricWorkspace through the upstream module." /><Button onClick={() => setSection('Workspaces')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Capacity inventory</Subtitle1>} description="Inspect Fabric capacities without changing state." /><Button onClick={() => setSection('Capacities')}>Open</Button></Card>
+          <Card><CardHeader header={<Subtitle1>Connection inventory</Subtitle1>} description="Run Get-FabricConnection through the upstream module." /><Button onClick={() => setSection('Connections')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Sources</Subtitle1>} description="See exactly which repo/module/API provides each capability." /><Button onClick={() => setSection('Sources')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>PowerShell Library</Subtitle1>} description="Browse and preview commands by Fabric resource and upstream source." /><Button onClick={() => setSection('PowerShell Library')}>Open library</Button></Card>
         </div>
@@ -202,6 +204,9 @@ export function App() {
     }
     if (section === 'Capacities') {
       return <InventoryPage title="Capacities" description="Live Fabric capacity inventory from the upstream MicrosoftFabricMgmt PowerShell module." connected={connected} capability={capacityCapability} fields={[{ key: 'id', label: 'ID' }, { key: 'sku', label: 'SKU' }, { key: 'region', label: 'Region' }, { key: 'state', label: 'State' }]} />;
+    }
+    if (section === 'Connections') {
+      return <InventoryPage title="Connections" description="Live connection inventory from the upstream MicrosoftFabricMgmt Get-FabricConnection cmdlet. Fields are discovered from returned data so upstream additions remain visible without UI rewrites." connected={connected} capability={connectionCapability} />;
     }
     if (section === 'PowerShell Library') return renderLibrary();
     if (section === 'Sources') return <SourcesPage />;
