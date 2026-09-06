@@ -38,19 +38,42 @@
 - [x] registered official Fabric REST GET provider via `Invoke-FabricAPIRequest`
 - [x] backend enforcement that execution requires an authenticated Studio session
 
-Only read-only operations are executable in this milestone. Fabric REST endpoints remain explicitly registered; arbitrary URLs and arbitrary HTTP methods are not accepted.
+Fabric REST endpoints remain explicitly registered; arbitrary URLs and arbitrary HTTP methods are not accepted.
 
 ## Milestone 3 - guarded writes
 
-- [ ] create/update workspace
+### Guarded-write contract
+
+- [x] writes blocked by default even when auto-discovered from MicrosoftFabricMgmt
+- [x] explicit `guarded-write` allowlist metadata
+- [x] tenant-bound mutation plans
+- [x] SHA-256 binding of capability + tenant + parameters + exact rendered command
+- [x] ten-minute plan expiry
+- [x] single-use plan state machine
+- [x] typed confirmation text
+- [x] upstream `SupportsShouldProcess` / `-WhatIf` validation when registered
+- [x] read-back verification through existing read capabilities
+- [x] mutation plan / validation / execution activity logging
+- [x] Change Plans UI for current backend-session plans
+- [x] diagnostics for read / guarded-write / blocked execution policies
+
+### Enabled writes
+
+- [x] create workspace through upstream `New-FabricWorkspace`
+- [x] update workspace name/description through upstream `Update-FabricWorkspace`
+- [x] enforce `WorkspaceName` or `WorkspaceDescription` before an update plan can be created
+
+### Still blocked
+
 - [ ] role assignment changes
 - [ ] capacity assignment
 - [ ] create/delete selected Fabric items
 - [ ] job retry/cancel
 - [ ] schedule create/update/delete
 - [ ] Git connect/commit/update
+- [ ] destructive workspace/item operations
 
-All writes require preview, validation and activity logging. Destructive operations require stronger confirmation. This milestone should introduce a separate guarded-write contract rather than weakening the read-only executor.
+Do not widen this list simply because a cmdlet is discoverable. A write should only become executable after its upstream semantics, confirmation behavior, verification path and rollback/blast-radius expectations have been reviewed.
 
 ## Milestone 4 - specialized tools
 
@@ -70,6 +93,7 @@ Specialized tools keep their own authentication, dependency and output lifecycle
 - [ ] richer item-to-run navigation so item IDs can be selected rather than pasted
 - [ ] result filtering/sorting and CSV export
 - [ ] saved read-only recipes/favorites
+- [ ] persisted mutation history across backend restarts without persisting credentials or approval tokens
 - [ ] capability compatibility report after upstream merges
 - [ ] optional update check against upstream Fabric Toolbox and Fabric REST specifications
 
