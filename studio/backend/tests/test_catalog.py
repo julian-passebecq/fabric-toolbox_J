@@ -41,6 +41,14 @@ def test_curated_entries_overlay_generated_metadata():
     assert workspace.source_path.endswith("Get-FabricWorkspace.ps1")
 
 
+def test_workspace_roles_remain_upstream_discovered():
+    roles = next(item for item in combined_catalog() if item.id == "ps-workspace-get-fabricworkspaceroleassignment")
+    assert roles.command == "Get-FabricWorkspaceRoleAssignment"
+    assert roles.provider == "MicrosoftFabricMgmt"
+    assert roles.generated is False
+    assert roles.parameters
+
+
 def test_builds_safe_read_command():
     workspace = next(item for item in discover_powershell_capabilities() if item.command == "Get-FabricWorkspace")
     command = build_read_command(workspace, {"WorkspaceName": "Finance O'Brien"})
@@ -76,7 +84,33 @@ def test_builds_registered_items_rest_get_via_upstream_module():
     assert "Get-FabricAPIHeaders" in command
     assert "Invoke-FabricAPIRequest" in command
     assert "-Method 'Get'" in command
+    assert "-WaitForCompletion" not in command
     assert "https://api.fabric.microsoft.com/v1/workspaces/ws-123/items?type=Notebook" in command
+
+
+def test_registered_item_detail_and_connections_endpoints():
+    catalog = combined_catalog()
+    detail = next(item for item in catalog if item.id == "rest-item-get")
+    connections = next(item for item in catalog if item.id == "rest-item-connections-list")
+
+    detail_command = build_rest_get_command(
+        detail,
+        {"workspaceId": "ws", "itemId": "item", "include": "DefaultIdentity"},
+    )
+    connection_command = build_rest_get_command(connections, {"workspaceId": "ws", "itemId": "item"})
+
+    assert "/v1/workspaces/ws/items/item?include=DefaultIdentity" in detail_command
+    assert "/v1/workspaces/ws/items/item/connections" in connection_command
+
+
+def test_git_status_uses_upstream_lro_waiting():
+    git_status = next(item for item in combined_catalog() if item.id == "rest-git-status")
+    command = build_rest_get_command(git_status, {"workspaceId": "ws-123"})
+
+    assert git_status.response_mode == "fabric-lro"
+    assert "/v1/workspaces/ws-123/git/status" in command
+    assert "Invoke-FabricAPIRequest" in command
+    assert "-WaitForCompletion" in command
 
 
 def test_rest_path_and_query_values_are_url_encoded():
