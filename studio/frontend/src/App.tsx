@@ -140,10 +140,13 @@ export function App() {
     return catalog.filter((cap) => !q || `${cap.title} ${cap.category} ${cap.provider} ${cap.command ?? ''} ${cap.endpoint ?? ''} ${cap.source_path ?? ''}`.toLowerCase().includes(q));
   }, [catalog, query]);
 
-  const workspaceDefaults = useMemo<Record<string, string | boolean>>(() => workspaceContext ? {
-    workspaceId: workspaceContext.id,
-    WorkspaceId: workspaceContext.id,
-  } : {}, [workspaceContext]);
+  const workspaceDefaults = useMemo<Record<string, string | boolean>>(() => {
+    if (!workspaceContext) return {};
+    return {
+      workspaceId: workspaceContext.id,
+      WorkspaceId: workspaceContext.id,
+    };
+  }, [workspaceContext]);
 
   const categories = useMemo(() => new Set(catalog.map((item) => item.category)).size, [catalog]);
   const workspaceCapability = catalog.find((item) => item.id === 'ps-workspace-get-fabricworkspace');
