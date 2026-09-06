@@ -14,17 +14,30 @@ PS_PUBLIC_ROOT = REPO_ROOT / "tools" / "MicrosoftFabricMgmt" / "source" / "Publi
 
 _FUNCTION_RE = re.compile(r"^\s*function\s+([A-Za-z0-9_-]+)", re.MULTILINE | re.IGNORECASE)
 _PARAM_RE = re.compile(r"\[Parameter(?:\([^\)]*\))?\]\s*(?:\[[^\]]+\]\s*)*\$([A-Za-z0-9_]+)", re.IGNORECASE)
+_HELP_SECTION_RE = r"^\s*\.{heading}\s*$\s*(.*?)(?=^\s*\.[A-Z][A-Z0-9_-]*(?:\s+[^\r\n]+)?\s*$|#>)"
 
 
 def _risk_for_command(name: str, category: str) -> str:
     lower = name.lower()
-    if category.lower() == "admin" or "admin" in lower:
+    if category.lower() == "admin" or "asadmin" in lower:
         return "admin"
     if any(token in lower for token in ("remove-", "delete-", "drop-", "unassign-", "disconnect-")):
         return "destructive"
     if any(token in lower for token in ("new-", "set-", "update-", "add-", "create-", "assign-", "invoke-", "start-", "stop-", "resume-", "suspend-")):
         return "write"
     return "read"
+
+
+def _help_section(text: str, heading: str) -> str | None:
+    match = re.search(
+        _HELP_SECTION_RE.format(heading=re.escape(heading)),
+        text,
+        flags=re.MULTILINE | re.DOTALL | re.IGNORECASE,
+    )
+    if not match:
+        return None
+    value = " ".join(line.strip() for line in match.group(1).strip().splitlines() if line.strip())
+    return value or None
 
 
 def load_static_capabilities() -> list[Capability]:
@@ -43,10 +56,12 @@ def discover_powershell_capabilities() -> list[Capability]:
         text = path.read_text(encoding="utf-8-sig", errors="replace")
         names = _FUNCTION_RE.findall(text)
         if not names:
-            # Public module files frequently use the file basename as the exported command.
             names = [path.stem]
+
         params = sorted(set(_PARAM_RE.findall(text)))
         category = path.relative_to(PS_PUBLIC_ROOT).parts[0]
+        synopsis = _help_section(text, "SYNOPSIS")
+
         for name in names:
             identifier = f"ps-{category}-{name}".lower().replace(" ", "-").replace("_", "-")
             found.append(
@@ -58,7 +73,7 @@ def discover_powershell_capabilities() -> list[Capability]:
                     source="microsoft/fabric-toolbox",
                     risk=_risk_for_command(name, category),
                     command=name,
-                    description=f"Public MicrosoftFabricMgmt command from the {category} capability group.",
+                    description=synopsis or f"Public MicrosoftFabricMgmt command from the {category} capability group.",
                     source_path=str(path.relative_to(REPO_ROOT)).replace("\\", "/"),
                     generated=True,
                     parameters=params,
