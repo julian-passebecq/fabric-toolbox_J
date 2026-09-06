@@ -7,7 +7,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from ..models import Capability
+from ..models import Capability, SessionStatus
 
 
 STUDIO_DIR = Path(__file__).resolve().parents[3]
@@ -81,6 +81,8 @@ class MicrosoftFabricMgmtRuntime:
         self._session = None
         self._session_type = None
         self._lock = threading.Lock()
+        self._connected = False
+        self._tenant_id: str | None = None
 
     def _load_session_type(self):
         if self._session_type is not None:
@@ -114,7 +116,14 @@ class MicrosoftFabricMgmtRuntime:
             f"[PSCustomObject]@{{ success = $true; tenant_id = {tenant}; auth = 'interactive' }} "
             "| ConvertTo-Json -Compress"
         )
-        return self.run_json(command)
+        result = self.run_json(command)
+        if result.get("success") is not False:
+            self._connected = True
+            self._tenant_id = tenant_id
+        return result
+
+    def status(self) -> SessionStatus:
+        return SessionStatus(connected=self._connected, tenant_id=self._tenant_id)
 
     def execute_read(self, capability: Capability, parameters: dict[str, Any] | None = None) -> dict[str, Any]:
         return self.run_json(build_read_command(capability, parameters))
@@ -136,6 +145,8 @@ class MicrosoftFabricMgmtRuntime:
             if self._session is not None:
                 self._session.close()
                 self._session = None
+            self._connected = False
+            self._tenant_id = None
 
 
 runtime = MicrosoftFabricMgmtRuntime()
