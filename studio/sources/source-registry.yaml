@@ -7,6 +7,7 @@ principles:
   - Wrap specialized Fabric Toolbox tools instead of copying their internals.
   - Keep Studio-owned orchestration thin and explicit.
   - Every executable capability must declare provenance and risk.
+  - Distinguish the feature provider from the execution transport.
 
 sources:
   - id: microsoftfabricmgmt
@@ -17,7 +18,7 @@ sources:
     local_path: tools/MicrosoftFabricMgmt
     integration: wrapped-local-module
     update_strategy: merge-upstream-main
-    role: primary
+    role: primary-feature-provider
     capability_scope:
       - admin
       - capacities
@@ -31,6 +32,19 @@ sources:
       - warehouses
       - sql-databases
       - environments
+    studio_modifies_upstream: false
+
+  - id: microsoftfabricmgmt-session-runtime
+    name: MicrosoftFabricMgmt persistent PowerShell session
+    origin: microsoft-fabric-toolbox
+    owner: microsoft
+    repository: microsoft/fabric-toolbox
+    local_path: tools/MicrosoftFabricMgmtMCPServer/core/powershell_session.py
+    integration: dynamic-runtime-import
+    update_strategy: merge-upstream-main
+    role: execution-transport-only
+    feature_source: false
+    note: Studio reuses the upstream session/process transport but capability provenance remains MicrosoftFabricMgmt.
     studio_modifies_upstream: false
 
   - id: fabric-rest
