@@ -31,6 +31,9 @@ type InventoryPageProps = {
   connected: boolean;
   capability?: Capability;
   fields?: InventoryField[];
+  selectedRowId?: string;
+  selectLabel?: string;
+  onSelectRow?: (row: Record<string, unknown>) => void;
 };
 
 function normaliseRows(result: Record<string, unknown>): Record<string, unknown>[] {
@@ -72,7 +75,7 @@ function discoverFields(rows: Record<string, unknown>[]): InventoryField[] {
   return primitive.filter((key) => !['displayName', 'DisplayName', 'name', 'Name'].includes(key)).slice(0, 7).map((key) => ({ key, label: titleCase(key) }));
 }
 
-export function InventoryPage({ title, description, connected, capability, fields }: InventoryPageProps) {
+export function InventoryPage({ title, description, connected, capability, fields, selectedRowId, selectLabel = 'Use', onSelectRow }: InventoryPageProps) {
   const styles = useStyles();
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [renderedCommand, setRenderedCommand] = useState('');
@@ -127,11 +130,21 @@ export function InventoryPage({ title, description, connected, capability, field
 
       <div className={styles.grid}>
         {rows.map((row, index) => {
-          const cardKey = displayValue(row.id ?? row.Id ?? `${index}`);
+          const rawId = row.id ?? row.Id;
+          const rowId = rawId === null || rawId === undefined ? '' : String(rawId);
+          const cardKey = rowId || `${index}`;
           const heading = displayValue(row.displayName ?? row.DisplayName ?? row.name ?? row.Name ?? `${title} ${index + 1}`);
+          const isSelected = Boolean(rowId && selectedRowId && rowId === selectedRowId);
           return (
             <Card key={cardKey}>
-              <CardHeader header={<Subtitle1>{heading}</Subtitle1>} />
+              <CardHeader
+                header={<Subtitle1>{heading}</Subtitle1>}
+                action={onSelectRow && rowId ? (
+                  <Button size="small" appearance={isSelected ? 'primary' : 'secondary'} onClick={() => onSelectRow(row)}>
+                    {isSelected ? 'Selected' : selectLabel}
+                  </Button>
+                ) : undefined}
+              />
               <div className={styles.fields}>
                 {visibleFields.map((field) => (
                   <div key={field.key} style={{ display: 'contents' }}>
