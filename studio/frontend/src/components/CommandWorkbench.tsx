@@ -15,8 +15,12 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Capability,
   ExecutionPreview,
+  MutationPlan,
+  createMutationPlan,
   executeCapability,
+  executeMutation,
   previewCapability,
+  validateMutation,
 } from '../api/client';
 import { ResultViewer } from './ResultViewer';
 
@@ -42,6 +46,15 @@ const useStyles = makeStyles({
     borderRadius: tokens.borderRadiusMedium,
     fontFamily: 'Consolas, monospace',
   },
+  plan: {
+    display: 'grid',
+    gap: '10px',
+    marginTop: '18px',
+    padding: '16px',
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground2,
+  },
   error: { color: tokens.colorPaletteRedForeground1, marginTop: '10px' },
   muted: { color: tokens.colorNeutralForeground3 },
   select: {
@@ -62,13 +75,19 @@ type CommandWorkbenchProps = {
   onClose?: () => void;
 };
 
+type BusyState = 'preview' | 'execute' | 'plan' | 'validate' | 'apply' | null;
+
 export function CommandWorkbench({ capability, connected, defaultParameters = {}, onClose }: CommandWorkbenchProps) {
   const styles = useStyles();
   const [values, setValues] = useState<Record<string, string | boolean>>({});
   const [preview, setPreview] = useState<ExecutionPreview | null>(null);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  const [verification, setVerification] = useState<Record<string, unknown> | null>(null);
+  const [mutationPlan, setMutationPlan] = useState<MutationPlan | null>(null);
+  const [validationResult, setValidationResult] = useState<Record<string, unknown> | null>(null);
+  const [confirmation, setConfirmation] = useState('');
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState<'preview' | 'execute' | null>(null);
+  const [busy, setBusy] = useState<BusyState>(null);
   const defaultKey = JSON.stringify(defaultParameters);
 
   useEffect(() => {
@@ -80,11 +99,18 @@ export function CommandWorkbench({ capability, connected, defaultParameters = {}
     setValues(defaults);
     setPreview(null);
     setResult(null);
+    setVerification(null);
+    setMutationPlan(null);
+    setValidationResult(null);
+    setConfirmation('');
     setError('');
   }, [capability.id, defaultKey]);
 
   const executableProvider = capability.provider === 'MicrosoftFabricMgmt' || capability.provider === 'Fabric REST API';
-  const executable = executableProvider && capability.risk === 'read';
+  const readExecutable = executableProvider && capability.risk === 'read' && capability.execution_policy !== 'blocked';
+  const guardedWrite = capability.provider === 'MicrosoftFabricMgmt'
+    && capability.risk === 'write'
+    && capability.execution_policy === 'guarded-write';
   const isLongRunning = capability.response_mode === 'fabric-lro';
 
   const requestParameters = useMemo(() => {
@@ -98,6 +124,15 @@ export function CommandWorkbench({ capability, connected, defaultParameters = {}
     }
     return params;
   }, [values]);
+
+  function setParameter(name: string, value: string | boolean) {
+    setValues((current) => ({ ...current, [name]: value }));
+    setMutationPlan(null);
+    setValidationResult(null);
+    setConfirmation('');
+    setResult(null);
+    setVerification(null);
+  }
 
   function validate(): string | null {
     for (const spec of capability.parameter_specs ?? []) {
@@ -121,6 +156,7 @@ export function CommandWorkbench({ capability, connected, defaultParameters = {}
     setBusy('preview');
     setError('');
     setResult(null);
+    setVerification(null);
     try {
       setPreview(await previewCapability(capability.id, requestParameters));
     } catch (err) {
@@ -130,7 +166,7 @@ export function CommandWorkbench({ capability, connected, defaultParameters = {}
     }
   }
 
-  async function doExecute() {
+  async function doExecuteRead() {
     const validation = validate();
     if (validation) {
       setError(validation);
@@ -160,10 +196,69 @@ export function CommandWorkbench({ capability, connected, defaultParameters = {}
     }
   }
 
+  async function doCreatePlan() {
+    const validation = validate();
+    if (validation) {
+      setError(validation);
+      return;
+    }
+    setBusy('plan');
+    setError('');
+    setResult(null);
+    setVerification(null);
+    setValidationResult(null);
+    setConfirmation('');
+    try {
+      setMutationPlan(await createMutationPlan(capability.id, requestParameters));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function doValidatePlan() {
+    if (!mutationPlan) return;
+    setBusy('validate');
+    setError('');
+    try {
+      const response = await validateMutation(mutationPlan.plan_id);
+      setMutationPlan(response.plan);
+      setValidationResult(response.result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function doApplyPlan() {
+    if (!mutationPlan) return;
+    setBusy('apply');
+    setError('');
+    try {
+      const response = await executeMutation(mutationPlan.plan_id, confirmation);
+      setMutationPlan(response.plan);
+      setResult(response.result);
+      setVerification(response.verification ?? null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function copyRendered() {
-    const command = preview?.rendered_command ?? capability.command ?? capability.endpoint;
+    const command = mutationPlan?.rendered_command ?? preview?.rendered_command ?? capability.command ?? capability.endpoint;
     if (command) await navigator.clipboard.writeText(command);
   }
+
+  const applyReady = Boolean(
+    mutationPlan
+    && mutationPlan.status === 'validated'
+    && confirmation === mutationPlan.confirmation_text
+    && connected,
+  );
 
   return (
     <section className={styles.root}>
@@ -179,6 +274,8 @@ export function CommandWorkbench({ capability, connected, defaultParameters = {}
         <Badge appearance="outline">Feature provider: {capability.provider}</Badge>
         <Badge appearance="outline">Source: {capability.source}</Badge>
         <Badge appearance={capability.risk === 'read' ? 'tint' : 'outline'}>{capability.risk.toUpperCase()}</Badge>
+        {capability.execution_policy && <Badge appearance="outline">{capability.execution_policy.toUpperCase()}</Badge>}
+        {capability.supports_whatif && <Badge appearance="tint">UPSTREAM WHATIF</Badge>}
         {isLongRunning && <Badge appearance="tint">FABRIC LRO</Badge>}
         {capability.generated && <Badge appearance="ghost">AUTO-DISCOVERED</Badge>}
       </div>
@@ -195,14 +292,14 @@ export function CommandWorkbench({ capability, connected, defaultParameters = {}
                 <Checkbox
                   checked={values[spec.name] === true}
                   label={`${spec.name}${spec.mandatory ? ' *' : ''}`}
-                  onChange={(_, data) => setValues((current) => ({ ...current, [spec.name]: data.checked === true }))}
+                  onChange={(_, data) => setParameter(spec.name, data.checked === true)}
                 />
               ) : spec.allowed_values.length > 0 ? (
                 <Field label={`${spec.name}${spec.mandatory ? ' *' : ''}`} hint={spec.description}>
                   <select
                     className={styles.select}
                     value={String(values[spec.name] ?? '')}
-                    onChange={(event) => setValues((current) => ({ ...current, [spec.name]: event.target.value }))}
+                    onChange={(event) => setParameter(spec.name, event.target.value)}
                   >
                     <option value="">Select…</option>
                     {spec.allowed_values.map((option) => <option key={option} value={option}>{option}</option>)}
@@ -212,7 +309,7 @@ export function CommandWorkbench({ capability, connected, defaultParameters = {}
                 <Field label={`${spec.name}${spec.mandatory ? ' *' : ''}`} hint={spec.description ?? `Parameter type: ${spec.type}`}>
                   <Input
                     value={String(values[spec.name] ?? '')}
-                    onChange={(_, data) => setValues((current) => ({ ...current, [spec.name]: data.value }))}
+                    onChange={(_, data) => setParameter(spec.name, data.value)}
                   />
                 </Field>
               )}
@@ -221,22 +318,29 @@ export function CommandWorkbench({ capability, connected, defaultParameters = {}
         </div>
       )}
 
-      {!executable && (
+      {!readExecutable && !guardedWrite && (
         <Card>
-          <Text>This capability is catalogued for reference but is blocked by the current read-only execution policy.</Text>
+          <Text>This capability is catalogued for provenance/reference but remains blocked by Studio execution policy.</Text>
         </Card>
       )}
 
       <div className={styles.actions}>
         <Button disabled={busy !== null} onClick={doPreview}>{busy === 'preview' ? 'Previewing…' : 'Preview PowerShell'}</Button>
-        <Button appearance="primary" disabled={!executable || !connected || busy !== null} onClick={doExecute}>
-          {busy === 'execute' ? (isLongRunning ? 'Waiting for Fabric…' : 'Running…') : 'Run read-only'}
-        </Button>
-        <Button disabled={!preview?.rendered_command && !capability.command && !capability.endpoint} onClick={copyRendered}>Copy</Button>
+        {readExecutable && (
+          <Button appearance="primary" disabled={!connected || busy !== null} onClick={doExecuteRead}>
+            {busy === 'execute' ? (isLongRunning ? 'Waiting for Fabric…' : 'Running…') : 'Run read-only'}
+          </Button>
+        )}
+        {guardedWrite && (
+          <Button appearance="primary" disabled={!connected || busy !== null} onClick={doCreatePlan}>
+            {busy === 'plan' ? 'Creating plan…' : mutationPlan ? 'Recreate plan' : 'Create guarded plan'}
+          </Button>
+        )}
+        <Button disabled={!preview?.rendered_command && !mutationPlan?.rendered_command && !capability.command && !capability.endpoint} onClick={copyRendered}>Copy</Button>
       </div>
 
-      {!connected && executable && <Text block className={styles.muted}>Connect to a Fabric tenant before execution. Preview remains available offline.</Text>}
-      {busy && <Spinner size="tiny" label={busy === 'preview' ? 'Rendering command' : isLongRunning ? 'Waiting for Fabric operation completion' : 'Executing command'} />}
+      {!connected && (readExecutable || guardedWrite) && <Text block className={styles.muted}>Connect to a Fabric tenant before execution. Command preview remains available offline.</Text>}
+      {busy && <Spinner size="tiny" label={busy === 'preview' ? 'Rendering command' : busy === 'validate' ? 'Running upstream -WhatIf' : busy === 'apply' ? 'Applying guarded mutation' : busy === 'plan' ? 'Creating tenant-bound mutation plan' : isLongRunning ? 'Waiting for Fabric operation completion' : 'Executing command'} />}
       {error && <Text block className={styles.error}>{error}</Text>}
 
       {preview && (
@@ -248,7 +352,51 @@ export function CommandWorkbench({ capability, connected, defaultParameters = {}
         </div>
       )}
 
+      {mutationPlan && (
+        <div className={styles.plan}>
+          <div className={styles.badges}>
+            <Badge appearance="filled">PLAN {mutationPlan.plan_id.slice(0, 8).toUpperCase()}</Badge>
+            <Badge appearance="outline">{mutationPlan.status.toUpperCase()}</Badge>
+            <Badge appearance="outline">Tenant-bound</Badge>
+            <Badge appearance="outline">Single use</Badge>
+          </div>
+          <Text block weight="semibold">Immutable mutation plan</Text>
+          <Text block className={styles.muted}>Expires: {new Date(mutationPlan.expires_at).toLocaleString()}</Text>
+          <Text block className={styles.muted}>SHA-256: {mutationPlan.digest}</Text>
+          <code className={styles.code}>{mutationPlan.rendered_command}</code>
+          {mutationPlan.validation_command && (
+            <>
+              <Text block weight="semibold">Upstream validation command</Text>
+              <code className={styles.code}>{mutationPlan.validation_command}</code>
+            </>
+          )}
+          <div className={styles.actions}>
+            {mutationPlan.supports_validation && (
+              <Button disabled={!connected || busy !== null || !['planned', 'validated'].includes(mutationPlan.status)} onClick={doValidatePlan}>
+                {busy === 'validate' ? 'Validating…' : mutationPlan.status === 'validated' ? 'Run -WhatIf again' : 'Validate with -WhatIf'}
+              </Button>
+            )}
+          </div>
+          {validationResult && <ResultViewer result={validationResult} fileName={`fabric-${capability.id}-whatif.json`} />}
+          <Field
+            label={`Type ${mutationPlan.confirmation_text} to apply`}
+            hint="The broker checks this exact text, current tenant, plan expiry and validation status before execution."
+          >
+            <Input value={confirmation} onChange={(_, data) => setConfirmation(data.value)} />
+          </Field>
+          <Button appearance="primary" disabled={!applyReady || busy !== null} onClick={doApplyPlan}>
+            {busy === 'apply' ? 'Applying…' : 'Apply guarded write'}
+          </Button>
+        </div>
+      )}
+
       {result && <ResultViewer result={result} fileName={`fabric-${capability.id}.json`} />}
+      {verification && (
+        <div>
+          <Text block weight="semibold">Read-back verification</Text>
+          <ResultViewer result={verification} fileName={`fabric-${capability.id}-verification.json`} />
+        </div>
+      )}
     </section>
   );
 }
