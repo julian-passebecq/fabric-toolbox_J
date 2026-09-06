@@ -10,6 +10,10 @@ def _workspace_create():
     return next(item for item in combined_catalog() if item.id == "ps-workspace-new-fabricworkspace")
 
 
+def _workspace_update():
+    return next(item for item in combined_catalog() if item.id == "ps-workspace-update-fabricworkspace")
+
+
 def _connected(tenant_id="tenant-a"):
     return SessionStatus(connected=True, tenant_id=tenant_id)
 
@@ -69,6 +73,21 @@ def test_plan_cannot_cross_tenant_sessions(monkeypatch):
 
     with pytest.raises(UnsafeOperation, match="different Fabric tenant"):
         broker.validate(plan.plan_id)
+
+
+def test_workspace_update_requires_name_or_description(monkeypatch):
+    broker = MutationBroker()
+    monkeypatch.setattr(runtime, "status", lambda: _connected())
+
+    with pytest.raises(ValueError, match="WorkspaceName, WorkspaceDescription"):
+        broker.create_plan(_workspace_update(), {"WorkspaceId": "ws-1"})
+
+    plan = broker.create_plan(
+        _workspace_update(),
+        {"WorkspaceId": "ws-1", "WorkspaceDescription": "New description"},
+    )
+    assert "Update-FabricWorkspace" in plan.rendered_command
+    assert "-WorkspaceDescription 'New description'" in plan.rendered_command
 
 
 def test_non_allowlisted_write_cannot_create_plan(monkeypatch):
