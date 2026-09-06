@@ -11,6 +11,17 @@
     "description": "List or retrieve Fabric workspaces through the upstream MicrosoftFabricMgmt module."
   },
   {
+    "id": "ps-workspace-get-fabricworkspaceroleassignment",
+    "title": "Inspect workspace roles",
+    "category": "Workspace",
+    "provider": "MicrosoftFabricMgmt",
+    "source": "microsoft/fabric-toolbox",
+    "risk": "read",
+    "command": "Get-FabricWorkspaceRoleAssignment",
+    "source_path": "tools/MicrosoftFabricMgmt/source/Public/Workspace/Get-FabricWorkspaceRoleAssignment.ps1",
+    "description": "Inspect workspace role assignments through the upstream MicrosoftFabricMgmt module."
+  },
+  {
     "id": "ps-capacity-get-fabriccapacity",
     "title": "List capacities",
     "category": "Capacity",
@@ -49,6 +60,37 @@
     "description": "List items in a workspace using the official Fabric v1 Items API. Execution reuses MicrosoftFabricMgmt Invoke-FabricAPIRequest."
   },
   {
+    "id": "rest-item-get",
+    "title": "Get item details",
+    "category": "Items",
+    "provider": "Fabric REST API",
+    "source": "Microsoft Fabric REST API",
+    "risk": "read",
+    "endpoint": "GET /v1/workspaces/{workspaceId}/items/{itemId}",
+    "parameters": ["workspaceId", "itemId", "include"],
+    "parameter_specs": [
+      {"name": "workspaceId", "type": "string", "mandatory": true, "is_switch": false, "description": "Fabric workspace ID.", "allowed_values": []},
+      {"name": "itemId", "type": "string", "mandatory": true, "is_switch": false, "description": "Fabric item ID.", "allowed_values": []},
+      {"name": "include", "type": "string", "mandatory": false, "is_switch": false, "description": "Optional item properties to include, for example DefaultIdentity.", "allowed_values": []}
+    ],
+    "description": "Retrieve generic item properties from the official Fabric Items API."
+  },
+  {
+    "id": "rest-item-connections-list",
+    "title": "List item connections",
+    "category": "Items",
+    "provider": "Fabric REST API",
+    "source": "Microsoft Fabric REST API",
+    "risk": "read",
+    "endpoint": "GET /v1/workspaces/{workspaceId}/items/{itemId}/connections",
+    "parameters": ["workspaceId", "itemId"],
+    "parameter_specs": [
+      {"name": "workspaceId", "type": "string", "mandatory": true, "is_switch": false, "description": "Fabric workspace ID.", "allowed_values": []},
+      {"name": "itemId", "type": "string", "mandatory": true, "is_switch": false, "description": "Fabric item ID.", "allowed_values": []}
+    ],
+    "description": "List connections used by a Fabric item through the official Items API. Pagination is handled by the upstream API helper."
+  },
+  {
     "id": "rest-job-instances-list",
     "title": "List item job instances",
     "category": "Runs & Schedules",
@@ -80,6 +122,21 @@
       {"name": "continuationToken", "type": "string", "mandatory": false, "is_switch": false, "description": "Optional continuation token for another result page.", "allowed_values": []}
     ],
     "description": "List schedules for a Fabric item/job type using the official Job Scheduler API."
+  },
+  {
+    "id": "rest-git-status",
+    "title": "Get workspace Git status",
+    "category": "Deployment & Git",
+    "provider": "Fabric REST API",
+    "source": "Microsoft Fabric REST API",
+    "risk": "read",
+    "response_mode": "fabric-lro",
+    "endpoint": "GET /v1/workspaces/{workspaceId}/git/status",
+    "parameters": ["workspaceId"],
+    "parameter_specs": [
+      {"name": "workspaceId", "type": "string", "mandatory": true, "is_switch": false, "description": "Fabric workspace ID connected to Git.", "allowed_values": []}
+    ],
+    "description": "Get workspace Git differences. This endpoint can return 202, so execution delegates LRO polling and result retrieval to MicrosoftFabricMgmt."
   },
   {
     "id": "rest-sqldatabase-create",
