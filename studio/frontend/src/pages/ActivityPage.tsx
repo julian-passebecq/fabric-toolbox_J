@@ -67,12 +67,12 @@ export function ActivityPage() {
               description={<Text>{text(record.timestamp)}</Text>}
             />
             <div className={styles.badges}>
-              {record.provider && <Badge appearance="outline">{text(record.provider)}</Badge>}
-              {record.risk && <Badge appearance="outline">{text(record.risk).toUpperCase()}</Badge>}
-              {record.capability_id && <Badge appearance="tint">{text(record.capability_id)}</Badge>}
+              {Boolean(record.provider) && <Badge appearance="outline">{text(record.provider)}</Badge>}
+              {Boolean(record.risk) && <Badge appearance="outline">{text(record.risk).toUpperCase()}</Badge>}
+              {Boolean(record.capability_id) && <Badge appearance="tint">{text(record.capability_id)}</Badge>}
             </div>
-            {record.source_path && <Text block>Source: {text(record.source_path)}</Text>}
-            {record.rendered_command && <code className={styles.code}>{text(record.rendered_command)}</code>}
+            {Boolean(record.source_path) && <Text block>Source: {text(record.source_path)}</Text>}
+            {Boolean(record.rendered_command) && <code className={styles.code}>{text(record.rendered_command)}</code>}
           </Card>
         ))}
       </div>
