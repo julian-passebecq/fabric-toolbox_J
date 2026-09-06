@@ -53,6 +53,8 @@ export function OperationsPage({ title, description, capabilities, connected, de
             <div className={styles.badges}>
               <Badge appearance="outline">{capability.provider}</Badge>
               <Badge appearance={capability.risk === 'read' ? 'tint' : 'outline'}>{capability.risk.toUpperCase()}</Badge>
+              {capability.execution_policy && <Badge appearance="outline">{capability.execution_policy.toUpperCase()}</Badge>}
+              {capability.supports_whatif && <Badge appearance="tint">WHATIF</Badge>}
               {capability.response_mode === 'fabric-lro' && <Badge appearance="tint">FABRIC LRO</Badge>}
               {capability.generated && <Badge appearance="ghost">AUTO-DISCOVERED</Badge>}
             </div>
@@ -60,7 +62,7 @@ export function OperationsPage({ title, description, capabilities, connected, de
             {capability.endpoint && <code className={styles.code}>{capability.endpoint}</code>}
             {capability.source_path && <Text block size={200} className={styles.muted}>{capability.source_path}</Text>}
             <Button appearance={selected?.id === capability.id ? 'primary' : 'secondary'} onClick={() => setSelected(capability)}>
-              {selected?.id === capability.id ? 'Selected' : 'Open'}
+              {selected?.id === capability.id ? 'Selected' : capability.execution_policy === 'guarded-write' ? 'Plan change' : 'Open'}
             </Button>
           </Card>
         ))}
