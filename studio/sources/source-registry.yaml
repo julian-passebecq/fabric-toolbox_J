@@ -10,6 +10,8 @@ principles:
   - Distinguish the feature provider from the execution transport.
   - Fabric REST capabilities are registered from verified official endpoints, never accepted as arbitrary URLs.
   - Delegate Fabric long-running-operation polling to MicrosoftFabricMgmt rather than implementing a second poller.
+  - Mutating operations are blocked by default and require an explicit guarded-write allowlist entry.
+  - Guarded writes are tenant-bound, expiring, hash-bound, single-use plans with typed approval and upstream validation when available.
 
 sources:
   - id: microsoftfabricmgmt
@@ -35,6 +37,10 @@ sources:
       - warehouses
       - sql-databases
       - environments
+    guarded_write_scope:
+      - New-FabricWorkspace
+      - Update-FabricWorkspace
+    guarded_write_note: Only these explicitly curated cmdlets are executable as writes in Studio v0.5. Both support upstream ShouldProcess/-WhatIf. Other discovered write/admin/destructive commands remain blocked.
     studio_modifies_upstream: false
 
   - id: microsoftfabricmgmt-session-runtime
@@ -49,6 +55,27 @@ sources:
     feature_source: false
     note: Studio reuses the upstream session/process transport but capability provenance remains the originating cmdlet or official Fabric REST API.
     studio_modifies_upstream: false
+
+  - id: studio-guarded-write-broker
+    name: Fabric Ops Studio guarded write broker
+    origin: studio-owned
+    owner: julian-passebecq/fabric-toolbox_J
+    local_path: studio/backend/app/mutations.py
+    integration: orchestration-only
+    update_strategy: studio-branch
+    role: safety-orchestration
+    feature_source: false
+    execution_transport: MicrosoftFabricMgmt persistent PowerShell session
+    safety:
+      default_write_policy: blocked
+      plan_ttl_minutes: 10
+      tenant_bound: true
+      digest: SHA-256
+      typed_confirmation: true
+      single_use: true
+      upstream_whatif_required_when_registered: true
+      read_back_verification: true
+    note: The broker does not reimplement Fabric management calls. It binds an exact upstream command and parameters to an expiring plan, validates through upstream -WhatIf where available, requires explicit typed approval, executes once, and performs a read-back when configured.
 
   - id: fabric-rest
     name: Microsoft Fabric REST API
@@ -72,6 +99,7 @@ sources:
         - GET
       arbitrary_urls: false
       lro_implementation: upstream-module
+      writes: blocked
     studio_modifies_upstream: false
 
   - id: fabric-security-audit
