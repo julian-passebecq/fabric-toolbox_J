@@ -116,6 +116,12 @@ export function App() {
   const connectionCapability = catalog.find((item) => item.id === 'ps-connections-get-fabricconnection');
   const itemCapabilities = catalog.filter((item) => item.id === 'rest-items-list');
   const jobCapabilities = catalog.filter((item) => ['rest-job-instances-list', 'rest-schedules-list'].includes(item.id));
+  const deploymentCapabilities = catalog.filter((item) => [
+    'Get-FabricDeploymentPipeline',
+    'Get-FabricDeploymentPipelineStage',
+    'Get-FabricDeploymentPipelineOperation',
+    'Get-FabricWorkspaceGitConnection',
+  ].includes(item.command ?? ''));
 
   async function copyCommand(cap: Capability) {
     const value = cap.command ?? cap.endpoint;
@@ -201,6 +207,7 @@ export function App() {
           <Card><CardHeader header={<Subtitle1>Runs & schedules</Subtitle1>} description="Inspect item job instances and schedules through the official Job Scheduler API." /><Button onClick={() => setSection('Runs & Schedules')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Capacity inventory</Subtitle1>} description="Inspect Fabric capacities without changing state." /><Button onClick={() => setSection('Capacities')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Connection inventory</Subtitle1>} description="Run Get-FabricConnection through the upstream module." /><Button onClick={() => setSection('Connections')}>Open</Button></Card>
+          <Card><CardHeader header={<Subtitle1>Deployment & Git</Subtitle1>} description="Inspect deployment pipelines and workspace Git connections through upstream cmdlets." /><Button onClick={() => setSection('Deployment & Git')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Sources</Subtitle1>} description="See exactly which repo/module/API provides each capability." /><Button onClick={() => setSection('Sources')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>PowerShell Library</Subtitle1>} description="Browse and preview commands by Fabric resource and upstream source." /><Button onClick={() => setSection('PowerShell Library')}>Open library</Button></Card>
         </div>
@@ -223,6 +230,9 @@ export function App() {
     }
     if (section === 'Connections') {
       return <InventoryPage title="Connections" description="Live connection inventory from the upstream MicrosoftFabricMgmt Get-FabricConnection cmdlet. Fields are discovered from returned data so upstream additions remain visible without UI rewrites." connected={connected} capability={connectionCapability} />;
+    }
+    if (section === 'Deployment & Git') {
+      return <OperationsPage title="Deployment & Git" description="Read-only deployment-pipeline and workspace Git-connection operations sourced directly from MicrosoftFabricMgmt. Git status is intentionally deferred until Studio supports Fabric long-running operations correctly." capabilities={deploymentCapabilities} connected={connected} />;
     }
     if (section === 'PowerShell Library') return renderLibrary();
     if (section === 'Sources') return <SourcesPage />;
