@@ -7,6 +7,7 @@ import {
   Text,
   Title1,
   makeStyles,
+  tokens,
 } from '@fluentui/react-components';
 import { useEffect, useState } from 'react';
 import { Capability } from '../api/client';
@@ -16,6 +17,8 @@ const useStyles = makeStyles({
   header: { marginBottom: '18px' },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '12px' },
   badges: { display: 'flex', gap: '8px', flexWrap: 'wrap', margin: '8px 0' },
+  code: { display: 'block', padding: '8px 10px', margin: '8px 0', backgroundColor: tokens.colorNeutralBackground3, borderRadius: tokens.borderRadiusMedium, fontFamily: 'Consolas, monospace', overflowWrap: 'anywhere' },
+  muted: { color: tokens.colorNeutralForeground3 },
 });
 
 type OperationsPageProps = {
@@ -49,8 +52,12 @@ export function OperationsPage({ title, description, capabilities, connected }: 
             <div className={styles.badges}>
               <Badge appearance="outline">{capability.provider}</Badge>
               <Badge appearance={capability.risk === 'read' ? 'tint' : 'outline'}>{capability.risk.toUpperCase()}</Badge>
+              {capability.response_mode === 'fabric-lro' && <Badge appearance="tint">FABRIC LRO</Badge>}
+              {capability.generated && <Badge appearance="ghost">AUTO-DISCOVERED</Badge>}
             </div>
-            {capability.endpoint && <Text block>{capability.endpoint}</Text>}
+            {capability.command && <code className={styles.code}>{capability.command}</code>}
+            {capability.endpoint && <code className={styles.code}>{capability.endpoint}</code>}
+            {capability.source_path && <Text block size={200} className={styles.muted}>{capability.source_path}</Text>}
             <Button appearance={selected?.id === capability.id ? 'primary' : 'secondary'} onClick={() => setSelected(capability)}>
               {selected?.id === capability.id ? 'Selected' : 'Open'}
             </Button>
