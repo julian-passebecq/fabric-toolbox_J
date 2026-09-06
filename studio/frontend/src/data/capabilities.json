@@ -22,6 +22,17 @@
     "description": "Inspect Fabric capacities using the upstream MicrosoftFabricMgmt module."
   },
   {
+    "id": "ps-connections-get-fabricconnection",
+    "title": "List connections",
+    "category": "Connections",
+    "provider": "MicrosoftFabricMgmt",
+    "source": "microsoft/fabric-toolbox",
+    "risk": "read",
+    "command": "Get-FabricConnection",
+    "source_path": "tools/MicrosoftFabricMgmt/source/Public/Connections/Get-FabricConnection.ps1",
+    "description": "List or retrieve Fabric connections through the upstream MicrosoftFabricMgmt module."
+  },
+  {
     "id": "rest-sqldatabase-create",
     "title": "Create SQL database",
     "category": "SQL Database",
