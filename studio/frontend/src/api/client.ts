@@ -146,6 +146,7 @@ export type Diagnostics = {
     total: number;
     providers: Record<string, number>;
     risks: Record<string, number>;
+    policies: Record<string, number>;
   };
   checks: DiagnosticCheck[];
 };
