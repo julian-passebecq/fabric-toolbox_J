@@ -114,12 +114,13 @@ class MicrosoftFabricMgmtRuntime:
             f"[PSCustomObject]@{{ success = $true; tenant_id = {tenant}; auth = 'interactive' }} "
             "| ConvertTo-Json -Compress"
         )
-        return self._run_json(command)
+        return self.run_json(command)
 
     def execute_read(self, capability: Capability, parameters: dict[str, Any] | None = None) -> dict[str, Any]:
-        return self._run_json(build_read_command(capability, parameters))
+        return self.run_json(build_read_command(capability, parameters))
 
-    def _run_json(self, command: str) -> dict[str, Any]:
+    def run_json(self, command: str) -> dict[str, Any]:
+        """Execute a pre-validated command through the upstream persistent PowerShell session."""
         session = self._get_session()
         raw = session.run(command)
         try:
