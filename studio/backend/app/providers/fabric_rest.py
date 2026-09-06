@@ -35,6 +35,9 @@ def build_rest_get_command(capability: Capability, parameters: dict[str, Any] | 
     if method != "GET":
         raise UnsafeOperation(f"Only GET is enabled for REST capabilities; method={method}")
 
+    if capability.response_mode not in {"sync", "fabric-lro"}:
+        raise UnsafeOperation(f"Unsupported REST response mode: {capability.response_mode}")
+
     path = endpoint_match.group("path")
     provided = parameters or {}
     allowed = {spec.name for spec in capability.parameter_specs} or set(capability.parameters)
@@ -65,9 +68,10 @@ def build_rest_get_command(capability: Capability, parameters: dict[str, Any] | 
 
     url = FABRIC_BASE_URL + path
     url_literal = _ps_literal(url)
+    lro_switch = " -WaitForCompletion" if capability.response_mode == "fabric-lro" else ""
     command = (
         f"$headers = Get-FabricAPIHeaders; "
-        f"$result = Invoke-FabricAPIRequest -BaseURI {url_literal} -Headers $headers -Method 'Get'; "
+        f"$result = Invoke-FabricAPIRequest -BaseURI {url_literal} -Headers $headers -Method 'Get'{lro_switch}; "
         "$result | ConvertTo-Json -Depth 20 -Compress"
     )
     return command
