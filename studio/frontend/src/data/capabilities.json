@@ -45,6 +45,7 @@
     "risk": "write",
     "execution_policy": "guarded-write",
     "supports_whatif": true,
+    "required_any_of": ["WorkspaceName", "WorkspaceDescription"],
     "command": "Update-FabricWorkspace",
     "source_path": "tools/MicrosoftFabricMgmt/source/Public/Workspace/Update-FabricWorkspace.ps1",
     "verification_capability_id": "ps-workspace-get-fabricworkspace",
