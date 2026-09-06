@@ -26,13 +26,15 @@ import {
   Wrench24Regular,
 } from '@fluentui/react-icons';
 import { useEffect, useMemo, useState } from 'react';
-import { Capability, connectFabric, getCapabilities } from './api/client';
+import { Capability, connectFabric, getCapabilities, getSession } from './api/client';
 import { CommandWorkbench } from './components/CommandWorkbench';
 import staticCapabilities from './data/capabilities.json';
 import { ActivityPage } from './pages/ActivityPage';
+import { DiagnosticsPage } from './pages/DiagnosticsPage';
 import { InventoryPage } from './pages/InventoryPage';
 import { OperationsPage } from './pages/OperationsPage';
 import { SourcesPage } from './pages/SourcesPage';
+import { SpecializedToolsPage } from './pages/SpecializedToolsPage';
 
 const nav = [
   ['Overview', AppsList24Regular],
@@ -46,6 +48,7 @@ const nav = [
   ['Assessment', Wrench24Regular],
   ['Lineage', Timeline24Regular],
   ['PowerShell Library', Library24Regular],
+  ['Diagnostics', Wrench24Regular],
   ['Activity Log', History24Regular],
   ['Sources', Key24Regular],
 ] as const;
@@ -68,6 +71,7 @@ const useStyles = makeStyles({
   search: { width: '340px' },
   code: { display: 'block', padding: '10px 12px', backgroundColor: tokens.colorNeutralBackground3, borderRadius: tokens.borderRadiusMedium, fontFamily: 'Consolas, monospace', overflowWrap: 'anywhere' },
   muted: { color: tokens.colorNeutralForeground3 },
+  sectionSpacer: { marginTop: '36px', paddingTop: '28px', borderTop: `1px solid ${tokens.colorNeutralStroke2}` },
 });
 
 function riskAppearance(risk: Capability['risk']) {
@@ -105,6 +109,23 @@ export function App() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    getSession()
+      .then((session) => {
+        if (cancelled) return;
+        setConnected(session.connected);
+        if (session.tenant_id) setTenantId(session.tenant_id);
+        setConnectionText(session.connected
+          ? `Connected to tenant ${session.tenant_id ?? 'current session'}`
+          : 'Not connected');
+      })
+      .catch(() => {
+        if (!cancelled) setConnectionText('Backend session unavailable');
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return catalog.filter((cap) => !q || `${cap.title} ${cap.category} ${cap.provider} ${cap.command ?? ''} ${cap.endpoint ?? ''} ${cap.source_path ?? ''}`.toLowerCase().includes(q));
@@ -112,11 +133,12 @@ export function App() {
 
   const categories = useMemo(() => new Set(catalog.map((item) => item.category)).size, [catalog]);
   const workspaceCapability = catalog.find((item) => item.id === 'ps-workspace-get-fabricworkspace');
+  const workspaceAccessCapabilities = catalog.filter((item) => item.id === 'ps-workspace-get-fabricworkspaceroleassignment');
   const capacityCapability = catalog.find((item) => item.id === 'ps-capacity-get-fabriccapacity');
   const connectionCapability = catalog.find((item) => item.id === 'ps-connections-get-fabricconnection');
-  const itemCapabilities = catalog.filter((item) => item.id === 'rest-items-list');
+  const itemCapabilities = catalog.filter((item) => ['rest-items-list', 'rest-item-get', 'rest-item-connections-list'].includes(item.id));
   const jobCapabilities = catalog.filter((item) => ['rest-job-instances-list', 'rest-schedules-list'].includes(item.id));
-  const deploymentCapabilities = catalog.filter((item) => [
+  const deploymentCapabilities = catalog.filter((item) => item.id === 'rest-git-status' || [
     'Get-FabricDeploymentPipeline',
     'Get-FabricDeploymentPipelineStage',
     'Get-FabricDeploymentPipelineOperation',
@@ -167,6 +189,7 @@ export function App() {
                 <Badge appearance="outline">{cap.category}</Badge>
                 <Badge appearance="outline">{cap.provider}</Badge>
                 <Badge appearance={riskAppearance(cap.risk)}>{cap.risk.toUpperCase()}</Badge>
+                {cap.response_mode === 'fabric-lro' && <Badge appearance="tint">FABRIC LRO</Badge>}
                 {cap.generated && <Badge appearance="ghost">AUTO-DISCOVERED</Badge>}
               </div>
               <Text block size={200}>Source: {cap.source}</Text>
@@ -202,12 +225,15 @@ export function App() {
           ))}
         </div>
         <div className={styles.cards}>
-          <Card><CardHeader header={<Subtitle1>Workspace inventory</Subtitle1>} description="Run Get-FabricWorkspace through the upstream module." /><Button onClick={() => setSection('Workspaces')}>Open</Button></Card>
-          <Card><CardHeader header={<Subtitle1>Items</Subtitle1>} description="List workspace items through the official Fabric Items API." /><Button onClick={() => setSection('Items')}>Open</Button></Card>
+          <Card><CardHeader header={<Subtitle1>Workspace inventory</Subtitle1>} description="Inventory workspaces and inspect role assignments through the upstream module." /><Button onClick={() => setSection('Workspaces')}>Open</Button></Card>
+          <Card><CardHeader header={<Subtitle1>Items</Subtitle1>} description="List items, retrieve item details and inspect item connections through official Fabric APIs." /><Button onClick={() => setSection('Items')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Runs & schedules</Subtitle1>} description="Inspect item job instances and schedules through the official Job Scheduler API." /><Button onClick={() => setSection('Runs & Schedules')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Capacity inventory</Subtitle1>} description="Inspect Fabric capacities without changing state." /><Button onClick={() => setSection('Capacities')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Connection inventory</Subtitle1>} description="Run Get-FabricConnection through the upstream module." /><Button onClick={() => setSection('Connections')}>Open</Button></Card>
-          <Card><CardHeader header={<Subtitle1>Deployment & Git</Subtitle1>} description="Inspect deployment pipelines and workspace Git connections through upstream cmdlets." /><Button onClick={() => setSection('Deployment & Git')}>Open</Button></Card>
+          <Card><CardHeader header={<Subtitle1>Deployment & Git</Subtitle1>} description="Inspect deployment pipelines, Git connections and LRO-aware workspace Git status." /><Button onClick={() => setSection('Deployment & Git')}>Open</Button></Card>
+          <Card><CardHeader header={<Subtitle1>Security</Subtitle1>} description="Inspect the upstream Fabric Security Audit workflow, prerequisites and entrypoint." /><Button onClick={() => setSection('Security')}>Open</Button></Card>
+          <Card><CardHeader header={<Subtitle1>Assessment</Subtitle1>} description="Expose the upstream migration assessment workflow without reimplementing its CLI." /><Button onClick={() => setSection('Assessment')}>Open</Button></Card>
+          <Card><CardHeader header={<Subtitle1>Diagnostics</Subtitle1>} description="Check PowerShell, upstream modules, Azure CLI and specialized-tool readiness." /><Button onClick={() => setSection('Diagnostics')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Sources</Subtitle1>} description="See exactly which repo/module/API provides each capability." /><Button onClick={() => setSection('Sources')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>PowerShell Library</Subtitle1>} description="Browse and preview commands by Fabric resource and upstream source." /><Button onClick={() => setSection('PowerShell Library')}>Open library</Button></Card>
         </div>
@@ -217,10 +243,17 @@ export function App() {
 
   function renderSection() {
     if (section === 'Workspaces') {
-      return <InventoryPage title="Workspaces" description="Live workspace inventory from the upstream MicrosoftFabricMgmt PowerShell module." connected={connected} capability={workspaceCapability} fields={[{ key: 'id', label: 'ID' }, { key: 'description', label: 'Description' }, { key: 'capacityId', label: 'Capacity ID' }, { key: 'CapacityName', label: 'Capacity' }]} />;
+      return (
+        <>
+          <InventoryPage title="Workspaces" description="Live workspace inventory from the upstream MicrosoftFabricMgmt PowerShell module." connected={connected} capability={workspaceCapability} fields={[{ key: 'id', label: 'ID' }, { key: 'description', label: 'Description' }, { key: 'capacityId', label: 'Capacity ID' }, { key: 'CapacityName', label: 'Capacity' }]} />
+          <div className={styles.sectionSpacer}>
+            <OperationsPage title="Workspace access" description="Read-only workspace role-assignment inspection. Parameter forms and source paths are generated from the upstream MicrosoftFabricMgmt cmdlet." capabilities={workspaceAccessCapabilities} connected={connected} />
+          </div>
+        </>
+      );
     }
     if (section === 'Items') {
-      return <OperationsPage title="Items" description="Generic Fabric item inventory sourced from the official Items REST API. The request is executed through the upstream MicrosoftFabricMgmt API helper, not a Studio-owned HTTP/auth stack." capabilities={itemCapabilities} connected={connected} />;
+      return <OperationsPage title="Items" description="Generic Fabric item inventory, item detail and item-connection reads sourced from official Items REST APIs. Requests are executed through the upstream MicrosoftFabricMgmt API helper." capabilities={itemCapabilities} connected={connected} />;
     }
     if (section === 'Runs & Schedules') {
       return <OperationsPage title="Runs & Schedules" description="Read-only Job Scheduler operations from the official Fabric REST API. Job execution, cancellation and schedule writes remain disabled." capabilities={jobCapabilities} connected={connected} />;
@@ -232,9 +265,19 @@ export function App() {
       return <InventoryPage title="Connections" description="Live connection inventory from the upstream MicrosoftFabricMgmt Get-FabricConnection cmdlet. Fields are discovered from returned data so upstream additions remain visible without UI rewrites." connected={connected} capability={connectionCapability} />;
     }
     if (section === 'Deployment & Git') {
-      return <OperationsPage title="Deployment & Git" description="Read-only deployment-pipeline and workspace Git-connection operations sourced directly from MicrosoftFabricMgmt. Git status is intentionally deferred until Studio supports Fabric long-running operations correctly." capabilities={deploymentCapabilities} connected={connected} />;
+      return <OperationsPage title="Deployment & Git" description="Read-only deployment-pipeline and Git operations. Git status uses Fabric's long-running-operation protocol through MicrosoftFabricMgmt -WaitForCompletion rather than a Studio-owned poller." capabilities={deploymentCapabilities} connected={connected} />;
+    }
+    if (section === 'Security') {
+      return <SpecializedToolsPage category="Security" description="Security troubleshooting remains an upstream specialized workflow because it crosses Fabric, Graph and SQL permission layers and emits a report bundle." />;
+    }
+    if (section === 'Assessment') {
+      return <SpecializedToolsPage category="Assessment" description="Migration assessment remains the upstream fat CLI with its own Python package, authentication and extraction lifecycle." />;
+    }
+    if (section === 'Lineage') {
+      return <SpecializedToolsPage category="Lineage" description="Column-level lineage is exposed as the upstream Fabric notebook workflow rather than being copied into Studio." />;
     }
     if (section === 'PowerShell Library') return renderLibrary();
+    if (section === 'Diagnostics') return <DiagnosticsPage />;
     if (section === 'Sources') return <SourcesPage />;
     if (section === 'Activity Log') return <ActivityPage />;
     if (section === 'Overview') return renderOverview();
