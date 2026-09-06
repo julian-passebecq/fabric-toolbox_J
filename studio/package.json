@@ -2,7 +2,7 @@
   "name": "fabric-ops-studio",
   "private": true,
   "version": "0.1.0",
-  "workspaces": ["frontend", "backend"],
+  "workspaces": ["frontend"],
   "scripts": {
     "dev": "npm run dev -w frontend",
     "build": "npm run build -w frontend"
