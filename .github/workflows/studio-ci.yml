@@ -11,6 +11,10 @@ on:
       - 'studio/**'
       - '.github/workflows/studio-ci.yml'
 
+concurrency:
+  group: fabric-ops-studio-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     runs-on: ubuntu-latest
