@@ -46,3 +46,20 @@ jobs:
       - name: Build frontend
         working-directory: studio
         run: npm run build
+
+  launcher:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse Windows launcher
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          $path = (Resolve-Path 'studio/scripts/start-studio.ps1').Path
+          [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Host "Launcher syntax OK: $path"
