@@ -19,7 +19,7 @@ The Studio is intentionally focused on tasks that are cumbersome to perform repe
 - lineage and impact inspection
 - monitoring entry points and operational summaries
 - a searchable PowerShell recipe/script catalog
-- safe execution of PowerShell and Fabric REST operations
+- safe execution of registered PowerShell and Fabric REST operations
 
 ## Explicitly out of scope
 
@@ -36,6 +36,18 @@ The following are deliberately excluded from the Studio product surface:
 - replacement of Power BI Desktop
 
 Reports and semantic models may still appear in inventory, lineage, permissions, Git, deployment and operational views because they are Fabric items. The Studio does not edit their analytical content.
+
+## Current safety model
+
+The generic executor is read-only.
+
+- `MicrosoftFabricMgmt` public commands are discovered automatically from `tools/MicrosoftFabricMgmt/source/Public`.
+- Read-only PowerShell commands may be previewed and executed after Fabric authentication.
+- Official Fabric REST operations must be registered explicitly with their endpoint and parameter schema.
+- The REST executor accepts only registered `GET` capabilities; there is no arbitrary URL box.
+- Fabric APIs that return `202 Accepted` declare `response_mode: fabric-lro` and delegate waiting/result retrieval to upstream `Invoke-FabricAPIRequest -WaitForCompletion`.
+- Write, admin and destructive generic capabilities remain blocked even when they are visible in the catalog.
+- Specialized tools keep separate execution boundaries when they require additional authentication, permissions, dependencies or output lifecycles.
 
 ## Primary execution hierarchy
 
@@ -58,29 +70,49 @@ A feature record should make it possible to answer:
 - Is it Microsoft, Fabric Toolbox, community, or Studio-owned?
 - Which repository/path implements it?
 - Which API does it call?
-- What license applies?
 - Is it vendored, wrapped, linked, or Studio-owned?
 - How is it updated?
-- Is it preview/beta/stable?
-- Is the operation read-only, write, admin, or destructive?
+- Is it read-only, write, admin, or destructive?
+- What component actually executes it?
 
-## UI principle
+## Current read-only workflow
 
-The UI is an operations console, not a black box.
+1. Start Studio.
+2. Connect to a Fabric tenant with the tenant ID.
+3. Open **Workspaces** and refresh the live inventory.
+4. Select **Use workspace** on a workspace card.
+5. The workspace becomes shared context and automatically fills matching `WorkspaceId` / `workspaceId` fields on Items, Runs & Schedules, Deployment & Git, Workspace Access and the PowerShell Library.
+6. Preview the generated PowerShell before execution when desired.
+7. Inspect results as a table or raw JSON; copy or download the JSON payload.
+8. Use **Activity Log**, **Sources** and **Diagnostics** to inspect what ran, where it came from and whether the local environment is ready.
 
-For an operation such as creating a SQL Database, users should be able to see:
+## Local Windows launch
 
-- the friendly form
-- the PowerShell command/recipe being used
-- the underlying REST endpoint when relevant
-- required permissions/prerequisites
-- source/provenance
-- a preview of the request
-- the execution result and logs
+Prerequisites:
 
-This keeps the Studio useful for both operators and people learning Fabric automation.
+- PowerShell 7 (`pwsh`)
+- Python available as `python`
+- Node.js and npm
 
-## Proposed top-level navigation
+From the repository root:
+
+```powershell
+.\studio\scripts\start-studio.ps1
+```
+
+Useful flags:
+
+```powershell
+# Do not open the browser automatically
+.\studio\scripts\start-studio.ps1 -NoBrowser
+
+# Skip Python/npm installation when dependencies are already present
+.\studio\scripts\start-studio.ps1 -SkipInstall
+```
+
+The launcher starts the API and UI in separate PowerShell 7 windows, then opens `http://127.0.0.1:5173` unless `-NoBrowser` is used.
+
+## Current top-level navigation
 
 - Overview
 - Workspaces
@@ -92,10 +124,30 @@ This keeps the Studio useful for both operators and people learning Fabric autom
 - Security
 - Assessment
 - Lineage
-- Monitoring
 - PowerShell Library
+- Diagnostics
 - Activity Log
 - Sources
+
+Security, Assessment and Lineage currently expose their upstream workflow, prerequisites and entrypoint. They are not executed through the generic read-only capability runner.
+
+## UI principle
+
+The UI is an operations console, not a black box.
+
+For each operation, users should be able to see as applicable:
+
+- the friendly/generated parameter form
+- inherited workspace context
+- the PowerShell command or execution wrapper being used
+- the underlying REST endpoint
+- long-running-operation behavior
+- required permissions/prerequisites
+- source/provenance
+- a preview of the request
+- the execution result and logs
+
+This keeps the Studio useful for both operators and people learning Fabric automation.
 
 ## Branch strategy
 
