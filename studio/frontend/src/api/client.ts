@@ -137,6 +137,22 @@ export type DiagnosticCheck = {
   detail: string;
 };
 
+export type CompatibilityIssue = {
+  severity: 'error' | 'warning';
+  capability_id: string;
+  message: string;
+};
+
+export type CompatibilityReport = {
+  status: 'compatible' | 'incompatible';
+  errors: number;
+  warnings: number;
+  duplicate_ids: string[];
+  local_sources_checked: number;
+  local_sources_missing: number;
+  issues: CompatibilityIssue[];
+};
+
 export type Diagnostics = {
   status: 'ready' | 'degraded';
   platform: string;
@@ -148,6 +164,7 @@ export type Diagnostics = {
     risks: Record<string, number>;
     policies: Record<string, number>;
   };
+  compatibility: CompatibilityReport;
   checks: DiagnosticCheck[];
 };
 
