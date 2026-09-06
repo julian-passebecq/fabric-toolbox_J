@@ -5,6 +5,15 @@ from pydantic import BaseModel, Field
 Risk = Literal["read", "write", "admin", "destructive"]
 
 
+class ParameterSpec(BaseModel):
+    name: str
+    type: str = "string"
+    mandatory: bool = False
+    is_switch: bool = False
+    description: str | None = None
+    allowed_values: list[str] = Field(default_factory=list)
+
+
 class Capability(BaseModel):
     id: str
     title: str
@@ -18,6 +27,7 @@ class Capability(BaseModel):
     source_path: str | None = None
     generated: bool = False
     parameters: list[str] = Field(default_factory=list)
+    parameter_specs: list[ParameterSpec] = Field(default_factory=list)
 
 
 class PreviewRequest(BaseModel):
