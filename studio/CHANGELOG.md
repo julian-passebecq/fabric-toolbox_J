@@ -1,5 +1,25 @@
 # Studio changelog
 
+## 0.4.0
+
+- Added declarative Fabric long-running-operation support for registered REST reads.
+- Reused `MicrosoftFabricMgmt Invoke-FabricAPIRequest -WaitForCompletion` and the upstream operation/result helpers instead of implementing a Studio polling loop.
+- Added official workspace Git status as an LRO-aware read operation.
+- Added generic item detail and item-connection reads.
+- Added workspace role-assignment inspection through the upstream `Get-FabricWorkspaceRoleAssignment` cmdlet.
+- Added shared workspace context: select a workspace once and generated PowerShell/REST forms inherit `WorkspaceId` / `workspaceId` automatically.
+- Added persistent backend session state and restored it in the frontend after page reloads while the backend process remains alive.
+- Added backend enforcement that read execution requires an authenticated Studio session.
+- Added a reusable result viewer with automatic table detection, raw JSON, copy and JSON download.
+- Added a Diagnostics page for PowerShell, Python, upstream module/session, Azure CLI and specialized-tool readiness.
+- Added explicit specialized-tool surfaces for Fabric Security Audit, Fabric Assessment Tool and Lineage Extractor, including prerequisites, upstream paths and entrypoints.
+- Kept Security Audit and Assessment execution preview-only and Lineage notebook-driven rather than flattening their authentication/dependency models into the generic executor.
+- Expanded source provenance with explicit LRO transport and specialized-tool execution boundaries.
+- Added tests for LRO rendering, item detail/connections, diagnostics and specialized-tool registry behavior.
+- Added a Windows CI job that parses `start-studio.ps1` with PowerShell 7.
+- Hardened the Windows launcher with prerequisite checks, separate backend/frontend PowerShell 7 processes, optional browser launch and `-SkipInstall` / `-NoBrowser` flags.
+- Preserved the npm workspace-root install model under `studio/package.json`.
+
 ## 0.3.0
 
 - Added guarded read-only execution for `MicrosoftFabricMgmt` cmdlets.
