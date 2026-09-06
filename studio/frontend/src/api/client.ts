@@ -56,6 +56,8 @@ export type SourceEntry = {
   update_strategy?: string;
   role?: string;
   feature_source?: boolean;
+  execution_transport?: string;
+  authentication_transport?: string;
   note?: string;
 };
 
