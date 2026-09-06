@@ -89,13 +89,22 @@ Specialized tools keep their own authentication, dependency and output lifecycle
 
 ## Milestone 5 - operator ergonomics
 
-- [ ] persisted recent workspace contexts without storing credentials
+- [x] persisted recent workspace contexts without storing credentials, scoped by Fabric tenant
 - [ ] richer item-to-run navigation so item IDs can be selected rather than pasted
-- [ ] result filtering/sorting and CSV export
-- [ ] saved read-only recipes/favorites
-- [ ] persisted mutation history across backend restarts without persisting credentials or approval tokens
-- [ ] capability compatibility report after upstream merges
+- [x] result filtering/sorting and CSV export
+- [x] saved operation favorites and per-page last selection in browser-local storage
+- [x] persisted mutation history across backend restarts by reconstructing from the redacted activity log rather than persisting live approval plans
+- [x] capability compatibility report after upstream merges
+- [x] searchable/exportable activity log with JSON and JSONL output
 - [ ] optional update check against upstream Fabric Toolbox and Fabric REST specifications
+
+## Next high-value pass
+
+- item context: select an item once and reuse `itemId` in runs, schedules, connections and future guarded item operations
+- guarded job cancellation/retry only after endpoint semantics and idempotency are reviewed
+- report-bundle browsing for Fabric Security Audit and Assessment outputs
+- compatibility baseline/diff between Studio versions rather than current-state audit only
+- optional upstream update signal without auto-mutating the fork
 
 ## Non-goals
 
