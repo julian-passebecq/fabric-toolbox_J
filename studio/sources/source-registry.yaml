@@ -1,4 +1,13 @@
 schema_version: 1
+product: Fabric Ops Studio
+
+principles:
+  - Prefer upstream MicrosoftFabricMgmt PowerShell commands.
+  - Prefer official Fabric REST APIs when PowerShell coverage is missing.
+  - Wrap specialized Fabric Toolbox tools instead of copying their internals.
+  - Keep Studio-owned orchestration thin and explicit.
+  - Every executable capability must declare provenance and risk.
+
 sources:
   - id: microsoftfabricmgmt
     name: MicrosoftFabricMgmt PowerShell module
@@ -7,35 +16,31 @@ sources:
     repository: microsoft/fabric-toolbox
     local_path: tools/MicrosoftFabricMgmt
     integration: wrapped-local-module
-    license: MIT
     update_strategy: merge-upstream-main
-    stability: upstream
     role: primary
-    notes: Primary execution backend for Fabric management operations. Studio should wrap commands rather than duplicate them.
+    capability_scope:
+      - admin
+      - capacities
+      - connections
+      - workspaces
+      - items
+      - pipelines
+      - deployment-pipelines
+      - notebooks
+      - lakehouses
+      - warehouses
+      - sql-databases
+      - environments
+    studio_modifies_upstream: false
 
-  - id: microsoftfabricmgmt-mcp
-    name: MicrosoftFabricMgmt MCP Server
-    origin: microsoft-fabric-toolbox
-    owner: microsoft
-    repository: microsoft/fabric-toolbox
-    local_path: tools/MicrosoftFabricMgmtMCPServer
-    integration: optional-adapter
-    license: MIT
-    update_strategy: merge-upstream-main
-    stability: upstream
-    role: optional
-    notes: Useful as an AI/client adapter but not required for deterministic Studio UI operations.
-
-  - id: fabric-rest-api
+  - id: fabric-rest
     name: Microsoft Fabric REST API
     origin: microsoft-official-api
-    documentation: https://learn.microsoft.com/rest/api/fabric/
-    integration: direct-rest
-    license: documentation-and-service-terms
-    update_strategy: track-official-api
-    stability: mixed
-    role: fallback
-    notes: Use when a required operation is not yet exposed cleanly by MicrosoftFabricMgmt.
+    owner: microsoft
+    integration: direct-http-via-backend
+    update_strategy: api-capability-registry-review
+    role: fallback-and-new-api
+    studio_modifies_upstream: false
 
   - id: fabric-security-audit
     name: Fabric Security Audit
@@ -43,11 +48,10 @@ sources:
     owner: microsoft
     repository: microsoft/fabric-toolbox
     local_path: tools/fabric-security-audit
-    integration: wrapped-tool
+    integration: subprocess-wrapper
     update_strategy: merge-upstream-main
-    stability: upstream
-    role: specialized
-    notes: Specialized security and effective-access troubleshooting workflow.
+    role: specialized-tool
+    studio_modifies_upstream: false
 
   - id: fabric-assessment-tool
     name: Fabric Assessment Tool
@@ -55,11 +59,10 @@ sources:
     owner: microsoft
     repository: microsoft/fabric-toolbox
     local_path: tools/fabric-assessment-tool
-    integration: wrapped-tool
+    integration: python-package-wrapper
     update_strategy: merge-upstream-main
-    stability: upstream
-    role: specialized
-    notes: Migration and environment assessment workflow.
+    role: specialized-tool
+    studio_modifies_upstream: false
 
   - id: lineage-extractor
     name: Fabric Lineage Extractor
@@ -67,30 +70,19 @@ sources:
     owner: microsoft
     repository: microsoft/fabric-toolbox
     local_path: tools/Lineage_Extractor
-    integration: wrapped-tool
+    integration: notebook-tool-wrapper
     update_strategy: merge-upstream-main
-    stability: upstream
-    role: specialized
-    notes: Metadata and column-level lineage extraction; use for operational impact views, not report authoring.
+    role: specialized-tool
+    studio_modifies_upstream: false
 
-  - id: sql-database-rest-powershell-sample
-    name: SQL Database REST + PowerShell recipe
-    origin: microsoft-learn
-    documentation: https://learn.microsoft.com/fabric/database/sql/create-rest-api
-    integration: recipe
-    update_strategy: track-official-doc
-    stability: official-documentation
-    role: recipe
-    notes: Pattern for exposing a friendly UI together with the exact PowerShell/REST recipe and prerequisites.
-
-excluded_sources:
+excluded_from_product_surface:
   - id: dax-performance-tuner
-    reason: Out of product scope; DAX optimization belongs in DAX Studio/other dedicated tools.
+    reason: DAX work belongs in DAX Studio / specialist tooling.
   - id: semantic-model-mcp
-    reason: Semantic model authoring is out of product scope; Tabular Editor covers this area.
+    reason: Semantic model authoring belongs in Tabular Editor / specialist tooling.
   - id: powerbi-modeling-mcp
-    reason: Power BI semantic-model development is out of product scope.
+    reason: Model authoring is out of scope.
   - id: fabric-report-mcp
-    reason: Report authoring/editing is out of product scope.
+    reason: Report authoring is out of scope.
   - id: power-bi-agentic-development
-    reason: Report/DAX development workflows are out of product scope.
+    reason: Report/model development is out of scope.

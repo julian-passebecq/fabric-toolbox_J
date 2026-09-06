@@ -1,0 +1,42 @@
+[
+  {
+    "id": "workspace-list",
+    "title": "List workspaces",
+    "category": "Workspace",
+    "provider": "MicrosoftFabricMgmt",
+    "source": "microsoft/fabric-toolbox",
+    "risk": "read",
+    "command": "Get-FabricWorkspace",
+    "description": "List Fabric workspaces available to the authenticated identity."
+  },
+  {
+    "id": "capacity-list",
+    "title": "List capacities",
+    "category": "Capacity",
+    "provider": "MicrosoftFabricMgmt",
+    "source": "microsoft/fabric-toolbox",
+    "risk": "read",
+    "command": "Get-FabricCapacity",
+    "description": "Inspect Fabric capacities available to the current identity."
+  },
+  {
+    "id": "sql-db-create",
+    "title": "Create SQL database",
+    "category": "SQL Database",
+    "provider": "Fabric REST API",
+    "source": "Microsoft Learn",
+    "risk": "write",
+    "endpoint": "POST /v1/workspaces/{workspaceId}/items",
+    "description": "Create a Fabric SQL Database and expose the equivalent PowerShell REST recipe."
+  },
+  {
+    "id": "security-audit",
+    "title": "Audit Fabric security",
+    "category": "Security",
+    "provider": "Fabric Security Audit",
+    "source": "microsoft/fabric-toolbox",
+    "risk": "admin",
+    "command": "Invoke-FabricSecurityAudit.ps1",
+    "description": "Run the upstream security troubleshooter without reimplementing its collection logic."
+  }
+]
