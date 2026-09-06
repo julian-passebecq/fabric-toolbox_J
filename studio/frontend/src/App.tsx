@@ -31,6 +31,7 @@ import { CommandWorkbench } from './components/CommandWorkbench';
 import staticCapabilities from './data/capabilities.json';
 import { ActivityPage } from './pages/ActivityPage';
 import { InventoryPage } from './pages/InventoryPage';
+import { OperationsPage } from './pages/OperationsPage';
 import { SourcesPage } from './pages/SourcesPage';
 
 const nav = [
@@ -73,6 +74,10 @@ function riskAppearance(risk: Capability['risk']) {
   return risk === 'read' ? 'tint' : risk === 'destructive' ? 'filled' : 'outline';
 }
 
+function isReadExecutable(capability: Capability) {
+  return capability.risk === 'read' && (capability.provider === 'MicrosoftFabricMgmt' || capability.provider === 'Fabric REST API');
+}
+
 export function App() {
   const styles = useStyles();
   const [section, setSection] = useState('Overview');
@@ -102,17 +107,20 @@ export function App() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return catalog.filter((cap) => !q || `${cap.title} ${cap.category} ${cap.provider} ${cap.command ?? ''} ${cap.source_path ?? ''}`.toLowerCase().includes(q));
+    return catalog.filter((cap) => !q || `${cap.title} ${cap.category} ${cap.provider} ${cap.command ?? ''} ${cap.endpoint ?? ''} ${cap.source_path ?? ''}`.toLowerCase().includes(q));
   }, [catalog, query]);
 
   const categories = useMemo(() => new Set(catalog.map((item) => item.category)).size, [catalog]);
   const workspaceCapability = catalog.find((item) => item.id === 'ps-workspace-get-fabricworkspace');
   const capacityCapability = catalog.find((item) => item.id === 'ps-capacity-get-fabriccapacity');
   const connectionCapability = catalog.find((item) => item.id === 'ps-connections-get-fabricconnection');
+  const itemCapabilities = catalog.filter((item) => item.id === 'rest-items-list');
+  const jobCapabilities = catalog.filter((item) => ['rest-job-instances-list', 'rest-schedules-list'].includes(item.id));
 
   async function copyCommand(cap: Capability) {
-    if (!cap.command) return;
-    await navigator.clipboard.writeText(cap.command);
+    const value = cap.command ?? cap.endpoint;
+    if (!value) return;
+    await navigator.clipboard.writeText(value);
   }
 
   async function handleConnect() {
@@ -138,10 +146,10 @@ export function App() {
         <div className={styles.hero}>
           <div>
             <Title1>PowerShell Library</Title1>
-            <Text block>Search upstream Fabric management cmdlets, inspect their source and generate safe read-only forms from PowerShell metadata.</Text>
+            <Text block>Search upstream Fabric management cmdlets and registered official REST operations, inspect their source, and preview the exact PowerShell execution.</Text>
             <Text block className={styles.muted}>{catalog.length} capabilities across {categories} categories.</Text>
           </div>
-          <Input className={styles.search} placeholder="Search command, category, provider or path" value={query} onChange={(_, data) => setQuery(data.value)} />
+          <Input className={styles.search} placeholder="Search command, endpoint, category, provider or path" value={query} onChange={(_, data) => setQuery(data.value)} />
         </div>
         <Divider />
         {catalogState === 'loading' && <Spinner label="Discovering PowerShell capabilities" />}
@@ -159,8 +167,8 @@ export function App() {
               {cap.command && <code className={styles.code}>{cap.command}</code>}
               {cap.endpoint && <code className={styles.code}>{cap.endpoint}</code>}
               <div className={styles.sourceRow}>
-                <Button size="small" onClick={() => setSelected(cap)}>{cap.risk === 'read' && cap.provider === 'MicrosoftFabricMgmt' ? 'Open / run' : 'Inspect'}</Button>
-                {cap.command && <Button size="small" appearance="secondary" onClick={() => copyCommand(cap)}>Copy PowerShell</Button>}
+                <Button size="small" onClick={() => setSelected(cap)}>{isReadExecutable(cap) ? 'Open / run' : 'Inspect'}</Button>
+                {(cap.command || cap.endpoint) && <Button size="small" appearance="secondary" onClick={() => copyCommand(cap)}>Copy</Button>}
               </div>
             </Card>
           ))}
@@ -189,6 +197,8 @@ export function App() {
         </div>
         <div className={styles.cards}>
           <Card><CardHeader header={<Subtitle1>Workspace inventory</Subtitle1>} description="Run Get-FabricWorkspace through the upstream module." /><Button onClick={() => setSection('Workspaces')}>Open</Button></Card>
+          <Card><CardHeader header={<Subtitle1>Items</Subtitle1>} description="List workspace items through the official Fabric Items API." /><Button onClick={() => setSection('Items')}>Open</Button></Card>
+          <Card><CardHeader header={<Subtitle1>Runs & schedules</Subtitle1>} description="Inspect item job instances and schedules through the official Job Scheduler API." /><Button onClick={() => setSection('Runs & Schedules')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Capacity inventory</Subtitle1>} description="Inspect Fabric capacities without changing state." /><Button onClick={() => setSection('Capacities')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Connection inventory</Subtitle1>} description="Run Get-FabricConnection through the upstream module." /><Button onClick={() => setSection('Connections')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Sources</Subtitle1>} description="See exactly which repo/module/API provides each capability." /><Button onClick={() => setSection('Sources')}>Open</Button></Card>
@@ -201,6 +211,12 @@ export function App() {
   function renderSection() {
     if (section === 'Workspaces') {
       return <InventoryPage title="Workspaces" description="Live workspace inventory from the upstream MicrosoftFabricMgmt PowerShell module." connected={connected} capability={workspaceCapability} fields={[{ key: 'id', label: 'ID' }, { key: 'description', label: 'Description' }, { key: 'capacityId', label: 'Capacity ID' }, { key: 'CapacityName', label: 'Capacity' }]} />;
+    }
+    if (section === 'Items') {
+      return <OperationsPage title="Items" description="Generic Fabric item inventory sourced from the official Items REST API. The request is executed through the upstream MicrosoftFabricMgmt API helper, not a Studio-owned HTTP/auth stack." capabilities={itemCapabilities} connected={connected} />;
+    }
+    if (section === 'Runs & Schedules') {
+      return <OperationsPage title="Runs & Schedules" description="Read-only Job Scheduler operations from the official Fabric REST API. Job execution, cancellation and schedule writes remain disabled." capabilities={jobCapabilities} connected={connected} />;
     }
     if (section === 'Capacities') {
       return <InventoryPage title="Capacities" description="Live Fabric capacity inventory from the upstream MicrosoftFabricMgmt PowerShell module." connected={connected} capability={capacityCapability} fields={[{ key: 'id', label: 'ID' }, { key: 'sku', label: 'SKU' }, { key: 'region', label: 'Region' }, { key: 'state', label: 'State' }]} />;
