@@ -90,6 +90,7 @@ export function CommandWorkbench({ capability, connected, onClose }: CommandWork
 
   const executableProvider = capability.provider === 'MicrosoftFabricMgmt' || capability.provider === 'Fabric REST API';
   const executable = executableProvider && capability.risk === 'read';
+  const isLongRunning = capability.response_mode === 'fabric-lro';
 
   const requestParameters = useMemo(() => {
     const params: Record<string, unknown> = {};
@@ -152,7 +153,9 @@ export function CommandWorkbench({ capability, connected, onClose }: CommandWork
         endpoint: capability.endpoint,
         rendered_command: response.rendered_command,
         executable: true,
-        reason: `Executed as a registered read-only ${capability.provider} operation.`,
+        reason: isLongRunning
+          ? 'Executed as a registered read-only operation; Fabric LRO completion was delegated to MicrosoftFabricMgmt.'
+          : `Executed as a registered read-only ${capability.provider} operation.`,
       });
       setResult(response.result);
     } catch (err) {
@@ -181,6 +184,7 @@ export function CommandWorkbench({ capability, connected, onClose }: CommandWork
         <Badge appearance="outline">Feature provider: {capability.provider}</Badge>
         <Badge appearance="outline">Source: {capability.source}</Badge>
         <Badge appearance={capability.risk === 'read' ? 'tint' : 'outline'}>{capability.risk.toUpperCase()}</Badge>
+        {isLongRunning && <Badge appearance="tint">FABRIC LRO</Badge>}
         {capability.generated && <Badge appearance="ghost">AUTO-DISCOVERED</Badge>}
       </div>
 
@@ -231,13 +235,13 @@ export function CommandWorkbench({ capability, connected, onClose }: CommandWork
       <div className={styles.actions}>
         <Button disabled={busy !== null} onClick={doPreview}>{busy === 'preview' ? 'Previewing…' : 'Preview PowerShell'}</Button>
         <Button appearance="primary" disabled={!executable || !connected || busy !== null} onClick={doExecute}>
-          {busy === 'execute' ? 'Running…' : 'Run read-only'}
+          {busy === 'execute' ? (isLongRunning ? 'Waiting for Fabric…' : 'Running…') : 'Run read-only'}
         </Button>
         <Button disabled={!preview?.rendered_command && !capability.command && !capability.endpoint} onClick={copyRendered}>Copy</Button>
       </div>
 
       {!connected && executable && <Text block className={styles.muted}>Connect to a Fabric tenant before execution. Preview remains available offline.</Text>}
-      {busy && <Spinner size="tiny" label={busy === 'preview' ? 'Rendering command' : 'Executing command'} />}
+      {busy && <Spinner size="tiny" label={busy === 'preview' ? 'Rendering command' : isLongRunning ? 'Waiting for Fabric operation completion' : 'Executing command'} />}
       {error && <Text block className={styles.error}>{error}</Text>}
 
       {preview && (
