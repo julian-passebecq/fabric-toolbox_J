@@ -30,6 +30,7 @@ import { Capability, connectFabric, getCapabilities, getSession } from './api/cl
 import { CommandWorkbench } from './components/CommandWorkbench';
 import staticCapabilities from './data/capabilities.json';
 import { ActivityPage } from './pages/ActivityPage';
+import { ChangePlansPage } from './pages/ChangePlansPage';
 import { DiagnosticsPage } from './pages/DiagnosticsPage';
 import { InventoryPage } from './pages/InventoryPage';
 import { OperationsPage } from './pages/OperationsPage';
@@ -39,6 +40,7 @@ import { SpecializedToolsPage } from './pages/SpecializedToolsPage';
 const nav = [
   ['Overview', AppsList24Regular],
   ['Workspaces', BuildingFactory24Regular],
+  ['Change Plans', Shield24Regular],
   ['Items', CloudDatabaseRegular],
   ['Runs & Schedules', Timeline24Regular],
   ['Capacities', DataUsageSettings24Regular],
@@ -79,7 +81,15 @@ function riskAppearance(risk: Capability['risk']) {
 }
 
 function isReadExecutable(capability: Capability) {
-  return capability.risk === 'read' && (capability.provider === 'MicrosoftFabricMgmt' || capability.provider === 'Fabric REST API');
+  return capability.risk === 'read'
+    && capability.execution_policy !== 'blocked'
+    && (capability.provider === 'MicrosoftFabricMgmt' || capability.provider === 'Fabric REST API');
+}
+
+function isGuardedWrite(capability: Capability) {
+  return capability.risk === 'write'
+    && capability.execution_policy === 'guarded-write'
+    && capability.provider === 'MicrosoftFabricMgmt';
 }
 
 function rowValue(row: Record<string, unknown>, keys: string[]): string {
@@ -147,8 +157,10 @@ export function App() {
   }
 
   const categories = useMemo(() => new Set(catalog.map((item) => item.category)).size, [catalog]);
+  const guardedWriteCount = useMemo(() => catalog.filter(isGuardedWrite).length, [catalog]);
   const workspaceCapability = catalog.find((item) => item.id === 'ps-workspace-get-fabricworkspace');
   const workspaceAccessCapabilities = catalog.filter((item) => item.id === 'ps-workspace-get-fabricworkspaceroleassignment');
+  const workspaceWriteCapabilities = catalog.filter((item) => ['ps-workspace-new-fabricworkspace', 'ps-workspace-update-fabricworkspace'].includes(item.id));
   const capacityCapability = catalog.find((item) => item.id === 'ps-capacity-get-fabriccapacity');
   const connectionCapability = catalog.find((item) => item.id === 'ps-connections-get-fabricconnection');
   const itemCapabilities = catalog.filter((item) => ['rest-items-list', 'rest-item-get', 'rest-item-connections-list'].includes(item.id));
@@ -212,6 +224,8 @@ export function App() {
                 <Badge appearance="outline">{cap.category}</Badge>
                 <Badge appearance="outline">{cap.provider}</Badge>
                 <Badge appearance={riskAppearance(cap.risk)}>{cap.risk.toUpperCase()}</Badge>
+                {cap.execution_policy && <Badge appearance="outline">{cap.execution_policy.toUpperCase()}</Badge>}
+                {cap.supports_whatif && <Badge appearance="tint">WHATIF</Badge>}
                 {cap.response_mode === 'fabric-lro' && <Badge appearance="tint">FABRIC LRO</Badge>}
                 {cap.generated && <Badge appearance="ghost">AUTO-DISCOVERED</Badge>}
               </div>
@@ -219,7 +233,9 @@ export function App() {
               {cap.command && <code className={styles.code}>{cap.command}</code>}
               {cap.endpoint && <code className={styles.code}>{cap.endpoint}</code>}
               <div className={styles.sourceRow}>
-                <Button size="small" onClick={() => setSelected(cap)}>{isReadExecutable(cap) ? 'Open / run' : 'Inspect'}</Button>
+                <Button size="small" onClick={() => setSelected(cap)}>
+                  {isReadExecutable(cap) ? 'Open / run' : isGuardedWrite(cap) ? 'Plan / apply' : 'Inspect'}
+                </Button>
                 {(cap.command || cap.endpoint) && <Button size="small" appearance="secondary" onClick={() => copyCommand(cap)}>Copy</Button>}
               </div>
             </Card>
@@ -236,11 +252,11 @@ export function App() {
         <div className={styles.hero}>
           <div>
             <Title1>Overview</Title1>
-            <Text block>Operational control plane for Microsoft Fabric.</Text>
+            <Text block>Operational control plane for Microsoft Fabric with read execution and tightly allowlisted guarded writes.</Text>
           </div>
         </div>
         <div className={styles.stats}>
-          {[['Catalog capabilities', String(catalog.length)], ['Capability groups', String(categories)], ['Execution mode', 'Read only'], ['Workspace context', workspaceContext?.name ?? 'None']].map(([label, value]) => (
+          {[['Catalog capabilities', String(catalog.length)], ['Guarded writes', String(guardedWriteCount)], ['Execution mode', 'Read + guarded'], ['Workspace context', workspaceContext?.name ?? 'None']].map(([label, value]) => (
             <Card key={label} className={styles.stat}>
               <Subtitle1>{value}</Subtitle1>
               <Text>{label}</Text>
@@ -248,7 +264,8 @@ export function App() {
           ))}
         </div>
         <div className={styles.cards}>
-          <Card><CardHeader header={<Subtitle1>Workspace inventory</Subtitle1>} description="Inventory workspaces, choose shared workspace context and inspect role assignments through the upstream module." /><Button onClick={() => setSection('Workspaces')}>Open</Button></Card>
+          <Card><CardHeader header={<Subtitle1>Workspace inventory & changes</Subtitle1>} description="Inventory workspaces and use guarded plans for the explicitly allowlisted create/update operations." /><Button onClick={() => setSection('Workspaces')}>Open</Button></Card>
+          <Card><CardHeader header={<Subtitle1>Change Plans</Subtitle1>} description="Review tenant-bound, expiring, single-use mutation plans created in the current backend session." /><Button onClick={() => setSection('Change Plans')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Items</Subtitle1>} description="List items, retrieve item details and inspect item connections through official Fabric APIs." /><Button onClick={() => setSection('Items')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Runs & schedules</Subtitle1>} description="Inspect item job instances and schedules through the official Job Scheduler API." /><Button onClick={() => setSection('Runs & Schedules')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Capacity inventory</Subtitle1>} description="Inspect Fabric capacities without changing state." /><Button onClick={() => setSection('Capacities')}>Open</Button></Card>
@@ -258,7 +275,7 @@ export function App() {
           <Card><CardHeader header={<Subtitle1>Assessment</Subtitle1>} description="Expose the upstream migration assessment workflow without reimplementing its CLI." /><Button onClick={() => setSection('Assessment')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Diagnostics</Subtitle1>} description="Check PowerShell, upstream modules, Azure CLI and specialized-tool readiness." /><Button onClick={() => setSection('Diagnostics')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Sources</Subtitle1>} description="See exactly which repo/module/API provides each capability." /><Button onClick={() => setSection('Sources')}>Open</Button></Card>
-          <Card><CardHeader header={<Subtitle1>PowerShell Library</Subtitle1>} description="Browse and preview commands by Fabric resource and upstream source." /><Button onClick={() => setSection('PowerShell Library')}>Open library</Button></Card>
+          <Card><CardHeader header={<Subtitle1>PowerShell Library</Subtitle1>} description="Browse commands, execution policies and upstream provenance." /><Button onClick={() => setSection('PowerShell Library')}>Open library</Button></Card>
         </div>
       </>
     );
@@ -279,11 +296,21 @@ export function App() {
             onSelectRow={selectWorkspace}
           />
           <div className={styles.sectionSpacer}>
-            <OperationsPage title="Workspace access" description="Read-only workspace role-assignment inspection. The selected workspace context is prefilled automatically." capabilities={workspaceAccessCapabilities} connected={connected} defaultParameters={workspaceDefaults} />
+            <OperationsPage
+              title="Guarded workspace changes"
+              description="Only create workspace and update workspace metadata are enabled. Both use upstream SupportsShouldProcess/-WhatIf plus Studio's tenant-bound, expiring, typed-approval mutation broker."
+              capabilities={workspaceWriteCapabilities}
+              connected={connected}
+              defaultParameters={workspaceDefaults}
+            />
+          </div>
+          <div className={styles.sectionSpacer}>
+            <OperationsPage title="Workspace access" description="Read-only workspace role-assignment inspection. Role mutations remain blocked in this milestone." capabilities={workspaceAccessCapabilities} connected={connected} defaultParameters={workspaceDefaults} />
           </div>
         </>
       );
     }
+    if (section === 'Change Plans') return <ChangePlansPage />;
     if (section === 'Items') {
       return <OperationsPage title="Items" description="Generic Fabric item inventory, item detail and item-connection reads sourced from official Items REST APIs. The selected workspace context is prefilled automatically." capabilities={itemCapabilities} connected={connected} defaultParameters={workspaceDefaults} />;
     }
@@ -324,7 +351,8 @@ export function App() {
           <Text size={200}>Management, operations and PowerShell</Text>
         </div>
         <div className={styles.sourceRow}>
-          <Badge appearance="outline">READ ONLY</Badge>
+          <Badge appearance="outline">READ EXECUTION</Badge>
+          <Badge appearance="tint">{guardedWriteCount} GUARDED WRITES</Badge>
           <Badge appearance="filled">Provenance enabled</Badge>
           <Badge appearance="outline">Catalog: {catalogState}</Badge>
         </div>
