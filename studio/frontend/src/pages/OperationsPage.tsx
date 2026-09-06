@@ -26,9 +26,10 @@ type OperationsPageProps = {
   description: string;
   capabilities: Capability[];
   connected: boolean;
+  defaultParameters?: Record<string, string | boolean>;
 };
 
-export function OperationsPage({ title, description, capabilities, connected }: OperationsPageProps) {
+export function OperationsPage({ title, description, capabilities, connected, defaultParameters = {} }: OperationsPageProps) {
   const styles = useStyles();
   const [selected, setSelected] = useState<Capability | null>(capabilities[0] ?? null);
 
@@ -65,7 +66,7 @@ export function OperationsPage({ title, description, capabilities, connected }: 
         ))}
       </div>
 
-      {selected && <CommandWorkbench capability={selected} connected={connected} />}
+      {selected && <CommandWorkbench capability={selected} connected={connected} defaultParameters={defaultParameters} />}
       {capabilities.length === 0 && <Text>No registered capability is available for this page.</Text>}
     </>
   );
