@@ -1,9 +1,12 @@
 from typing import Any, Literal
-from pydantic import BaseModel, Field
+
+from pydantic import BaseModel, Field, model_validator
 
 
 Risk = Literal["read", "write", "admin", "destructive"]
 ResponseMode = Literal["sync", "fabric-lro"]
+ExecutionPolicy = Literal["read", "guarded-write", "blocked"]
+MutationStatus = Literal["planned", "validated", "executing", "executed", "failed", "expired"]
 
 
 class ParameterSpec(BaseModel):
@@ -28,8 +31,18 @@ class Capability(BaseModel):
     source_path: str | None = None
     generated: bool = False
     response_mode: ResponseMode = "sync"
+    execution_policy: ExecutionPolicy | None = None
+    supports_whatif: bool = False
+    verification_capability_id: str | None = None
+    verification_parameter_map: dict[str, str] = Field(default_factory=dict)
     parameters: list[str] = Field(default_factory=list)
     parameter_specs: list[ParameterSpec] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def default_execution_policy(self):
+        if self.execution_policy is None:
+            self.execution_policy = "read" if self.risk == "read" else "blocked"
+        return self
 
 
 class PreviewRequest(BaseModel):
@@ -60,8 +73,45 @@ class ExecutionResult(BaseModel):
     result: dict[str, Any]
 
 
+class MutationPlanRequest(BaseModel):
+    parameters: dict[str, Any] = Field(default_factory=dict)
+
+
+class MutationApprovalRequest(BaseModel):
+    confirmation: str = Field(min_length=1)
+
+
+class MutationPlan(BaseModel):
+    plan_id: str
+    capability_id: str
+    capability_title: str
+    provider: str
+    risk: Risk
+    tenant_id: str
+    parameters: dict[str, Any]
+    rendered_command: str
+    validation_command: str | None = None
+    supports_validation: bool = False
+    confirmation_text: str
+    digest: str
+    created_at: str
+    expires_at: str
+    status: MutationStatus = "planned"
+
+
+class MutationValidationResult(BaseModel):
+    plan: MutationPlan
+    result: dict[str, Any]
+
+
+class MutationExecutionResult(BaseModel):
+    plan: MutationPlan
+    result: dict[str, Any]
+    verification: dict[str, Any] | None = None
+
+
 class SessionStatus(BaseModel):
-    mode: Literal["read-only"] = "read-only"
+    mode: Literal["guarded-writes"] = "guarded-writes"
     transport: str = "MicrosoftFabricMgmtMCPServer/core/powershell_session.py"
     feature_provider: str = "MicrosoftFabricMgmt"
     connected: bool = False
