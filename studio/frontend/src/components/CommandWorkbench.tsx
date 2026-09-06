@@ -66,27 +66,30 @@ const useStyles = makeStyles({
 type CommandWorkbenchProps = {
   capability: Capability;
   connected: boolean;
+  defaultParameters?: Record<string, string | boolean>;
   onClose?: () => void;
 };
 
-export function CommandWorkbench({ capability, connected, onClose }: CommandWorkbenchProps) {
+export function CommandWorkbench({ capability, connected, defaultParameters = {}, onClose }: CommandWorkbenchProps) {
   const styles = useStyles();
   const [values, setValues] = useState<Record<string, string | boolean>>({});
   const [preview, setPreview] = useState<ExecutionPreview | null>(null);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<'preview' | 'execute' | null>(null);
+  const defaultKey = JSON.stringify(defaultParameters);
 
   useEffect(() => {
     const defaults: Record<string, string | boolean> = {};
     for (const spec of capability.parameter_specs ?? []) {
-      defaults[spec.name] = spec.is_switch ? false : '';
+      const inherited = defaultParameters[spec.name];
+      defaults[spec.name] = inherited !== undefined ? inherited : spec.is_switch ? false : '';
     }
     setValues(defaults);
     setPreview(null);
     setResult(null);
     setError('');
-  }, [capability.id]);
+  }, [capability.id, defaultKey]);
 
   const executableProvider = capability.provider === 'MicrosoftFabricMgmt' || capability.provider === 'Fabric REST API';
   const executable = executableProvider && capability.risk === 'read';
