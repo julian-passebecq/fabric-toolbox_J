@@ -47,7 +47,7 @@ export function DiagnosticsPage() {
       <div className={styles.header}>
         <div>
           <Title1>Diagnostics</Title1>
-          <Text block>Local runtime readiness for Studio, upstream Fabric tooling and specialized workflows.</Text>
+          <Text block>Local runtime readiness for Studio, upstream Fabric tooling, guarded writes and specialized workflows.</Text>
         </div>
         <Button onClick={load}>Refresh</Button>
       </div>
@@ -59,6 +59,8 @@ export function DiagnosticsPage() {
             <Badge appearance={data.status === 'ready' ? 'tint' : 'outline'}>{data.status.toUpperCase()}</Badge>
             <Badge appearance="outline">Python {data.python}</Badge>
             <Badge appearance="outline">Catalog {data.catalog.total}</Badge>
+            <Badge appearance="tint">Guarded {data.catalog.policies['guarded-write'] ?? 0}</Badge>
+            <Badge appearance="outline">Blocked {data.catalog.policies.blocked ?? 0}</Badge>
             <Badge appearance={data.session.connected ? 'tint' : 'outline'}>{data.session.connected ? 'FABRIC CONNECTED' : 'FABRIC OFFLINE'}</Badge>
           </div>
           <Text block className={styles.muted}>{data.platform}</Text>
