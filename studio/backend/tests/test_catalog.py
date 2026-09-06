@@ -1,6 +1,7 @@
 import pytest
 
 from app.catalog import combined_catalog, discover_powershell_capabilities
+from app.providers.fabric_rest import build_rest_get_command
 from app.providers.microsoftfabricmgmt import UnsafeOperation, build_read_command
 
 
@@ -66,3 +67,38 @@ def test_rejects_mutating_command():
     remove_workspace = next(item for item in discover_powershell_capabilities() if item.command == "Remove-FabricWorkspace")
     with pytest.raises(UnsafeOperation):
         build_read_command(remove_workspace, {"WorkspaceId": "abc"})
+
+
+def test_builds_registered_items_rest_get_via_upstream_module():
+    items = next(item for item in combined_catalog() if item.id == "rest-items-list")
+    command = build_rest_get_command(items, {"workspaceId": "ws-123", "type": "Notebook"})
+
+    assert "Get-FabricAPIHeaders" in command
+    assert "Invoke-FabricAPIRequest" in command
+    assert "-Method 'Get'" in command
+    assert "https://api.fabric.microsoft.com/v1/workspaces/ws-123/items?type=Notebook" in command
+
+
+def test_rest_path_and_query_values_are_url_encoded():
+    items = next(item for item in combined_catalog() if item.id == "rest-items-list")
+    command = build_rest_get_command(items, {"workspaceId": "a b", "type": "Data Pipeline"})
+
+    assert "/workspaces/a%20b/items?type=Data+Pipeline" in command
+
+
+def test_rest_requires_registered_mandatory_parameters():
+    items = next(item for item in combined_catalog() if item.id == "rest-items-list")
+    with pytest.raises(ValueError, match="workspaceId"):
+        build_rest_get_command(items, {})
+
+
+def test_rest_rejects_unknown_parameters():
+    items = next(item for item in combined_catalog() if item.id == "rest-items-list")
+    with pytest.raises(ValueError, match="Unknown REST parameters"):
+        build_rest_get_command(items, {"workspaceId": "ws", "arbitraryUrl": "https://example.com"})
+
+
+def test_rest_blocks_registered_write_endpoint():
+    create_db = next(item for item in combined_catalog() if item.id == "rest-sqldatabase-create")
+    with pytest.raises(UnsafeOperation):
+        build_rest_get_command(create_db, {"workspaceId": "ws"})
