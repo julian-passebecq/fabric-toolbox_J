@@ -23,6 +23,30 @@ export type ExecutionResponse = {
   result: Record<string, unknown>;
 };
 
+export type SourceEntry = {
+  id: string;
+  name: string;
+  origin: string;
+  owner?: string;
+  repository?: string;
+  local_path?: string;
+  integration?: string;
+  update_strategy?: string;
+  role?: string;
+  feature_source?: boolean;
+  note?: string;
+};
+
+export type SourceRegistry = {
+  schema_version: number;
+  product: string;
+  principles?: string[];
+  sources: SourceEntry[];
+  excluded_from_product_surface?: Array<{ id: string; reason: string }>;
+};
+
+export type ActivityRecord = Record<string, unknown> & { timestamp?: string; action?: string };
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
@@ -64,4 +88,12 @@ export function previewCapability(capabilityId: string, parameters: Record<strin
     method: 'POST',
     body: JSON.stringify({ parameters }),
   });
+}
+
+export function getSources() {
+  return request<SourceRegistry>('/api/sources');
+}
+
+export function getActivity(limit = 200) {
+  return request<ActivityRecord[]>(`/api/activity?limit=${limit}`);
 }
