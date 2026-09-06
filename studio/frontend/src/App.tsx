@@ -56,9 +56,9 @@ const nav = [
 const useStyles = makeStyles({
   root: { minHeight: '100vh', display: 'grid', gridTemplateRows: '64px 48px 1fr', backgroundColor: tokens.colorNeutralBackground2 },
   header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', backgroundColor: tokens.colorNeutralBackground1, borderBottom: `1px solid ${tokens.colorNeutralStroke2}` },
-  connectionBar: { display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 20px', backgroundColor: tokens.colorNeutralBackground1, borderBottom: `1px solid ${tokens.colorNeutralStroke2}` },
-  tenantInput: { width: '360px' },
-  connectionText: { marginLeft: '4px', color: tokens.colorNeutralForeground3 },
+  connectionBar: { display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 20px', backgroundColor: tokens.colorNeutralBackground1, borderBottom: `1px solid ${tokens.colorNeutralStroke2}`, overflowX: 'auto' },
+  tenantInput: { width: '330px', minWidth: '250px' },
+  connectionText: { marginLeft: '4px', color: tokens.colorNeutralForeground3, whiteSpace: 'nowrap' },
   body: { display: 'grid', gridTemplateColumns: '240px 1fr', minHeight: 0 },
   nav: { backgroundColor: tokens.colorNeutralBackground1, borderRight: `1px solid ${tokens.colorNeutralStroke2}`, padding: '12px 8px' },
   navButton: { width: '100%', justifyContent: 'flex-start', marginBottom: '4px' },
@@ -82,6 +82,14 @@ function isReadExecutable(capability: Capability) {
   return capability.risk === 'read' && (capability.provider === 'MicrosoftFabricMgmt' || capability.provider === 'Fabric REST API');
 }
 
+function rowValue(row: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = row[key];
+    if (value !== null && value !== undefined && value !== '') return String(value);
+  }
+  return '';
+}
+
 export function App() {
   const styles = useStyles();
   const [section, setSection] = useState('Overview');
@@ -93,6 +101,7 @@ export function App() {
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [connectionText, setConnectionText] = useState('Not connected');
+  const [workspaceContext, setWorkspaceContext] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,6 +140,11 @@ export function App() {
     return catalog.filter((cap) => !q || `${cap.title} ${cap.category} ${cap.provider} ${cap.command ?? ''} ${cap.endpoint ?? ''} ${cap.source_path ?? ''}`.toLowerCase().includes(q));
   }, [catalog, query]);
 
+  const workspaceDefaults = useMemo<Record<string, string | boolean>>(() => workspaceContext ? {
+    workspaceId: workspaceContext.id,
+    WorkspaceId: workspaceContext.id,
+  } : {}, [workspaceContext]);
+
   const categories = useMemo(() => new Set(catalog.map((item) => item.category)).size, [catalog]);
   const workspaceCapability = catalog.find((item) => item.id === 'ps-workspace-get-fabricworkspace');
   const workspaceAccessCapabilities = catalog.filter((item) => item.id === 'ps-workspace-get-fabricworkspaceroleassignment');
@@ -151,10 +165,18 @@ export function App() {
     await navigator.clipboard.writeText(value);
   }
 
+  function selectWorkspace(row: Record<string, unknown>) {
+    const id = rowValue(row, ['id', 'Id', 'workspaceId', 'WorkspaceId']);
+    if (!id) return;
+    const name = rowValue(row, ['displayName', 'DisplayName', 'name', 'Name']) || id;
+    setWorkspaceContext({ id, name });
+  }
+
   async function handleConnect() {
     if (!tenantId.trim()) return;
     setConnecting(true);
     setConnected(false);
+    setWorkspaceContext(null);
     setConnectionText('Opening Fabric authentication...');
     try {
       const result = await connectFabric(tenantId.trim());
@@ -202,7 +224,7 @@ export function App() {
             </Card>
           ))}
         </div>
-        {selected && <CommandWorkbench capability={selected} connected={connected} onClose={() => setSelected(null)} />}
+        {selected && <CommandWorkbench capability={selected} connected={connected} defaultParameters={workspaceDefaults} onClose={() => setSelected(null)} />}
       </>
     );
   }
@@ -217,7 +239,7 @@ export function App() {
           </div>
         </div>
         <div className={styles.stats}>
-          {[['Catalog capabilities', String(catalog.length)], ['Capability groups', String(categories)], ['Execution mode', 'Read only'], ['Fabric session', connected ? 'Connected' : 'Offline']].map(([label, value]) => (
+          {[['Catalog capabilities', String(catalog.length)], ['Capability groups', String(categories)], ['Execution mode', 'Read only'], ['Workspace context', workspaceContext?.name ?? 'None']].map(([label, value]) => (
             <Card key={label} className={styles.stat}>
               <Subtitle1>{value}</Subtitle1>
               <Text>{label}</Text>
@@ -225,7 +247,7 @@ export function App() {
           ))}
         </div>
         <div className={styles.cards}>
-          <Card><CardHeader header={<Subtitle1>Workspace inventory</Subtitle1>} description="Inventory workspaces and inspect role assignments through the upstream module." /><Button onClick={() => setSection('Workspaces')}>Open</Button></Card>
+          <Card><CardHeader header={<Subtitle1>Workspace inventory</Subtitle1>} description="Inventory workspaces, choose shared workspace context and inspect role assignments through the upstream module." /><Button onClick={() => setSection('Workspaces')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Items</Subtitle1>} description="List items, retrieve item details and inspect item connections through official Fabric APIs." /><Button onClick={() => setSection('Items')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Runs & schedules</Subtitle1>} description="Inspect item job instances and schedules through the official Job Scheduler API." /><Button onClick={() => setSection('Runs & Schedules')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Capacity inventory</Subtitle1>} description="Inspect Fabric capacities without changing state." /><Button onClick={() => setSection('Capacities')}>Open</Button></Card>
@@ -245,18 +267,27 @@ export function App() {
     if (section === 'Workspaces') {
       return (
         <>
-          <InventoryPage title="Workspaces" description="Live workspace inventory from the upstream MicrosoftFabricMgmt PowerShell module." connected={connected} capability={workspaceCapability} fields={[{ key: 'id', label: 'ID' }, { key: 'description', label: 'Description' }, { key: 'capacityId', label: 'Capacity ID' }, { key: 'CapacityName', label: 'Capacity' }]} />
+          <InventoryPage
+            title="Workspaces"
+            description="Live workspace inventory from the upstream MicrosoftFabricMgmt PowerShell module. Select one workspace to reuse its ID across Studio operation forms."
+            connected={connected}
+            capability={workspaceCapability}
+            fields={[{ key: 'id', label: 'ID' }, { key: 'description', label: 'Description' }, { key: 'capacityId', label: 'Capacity ID' }, { key: 'CapacityName', label: 'Capacity' }]}
+            selectedRowId={workspaceContext?.id}
+            selectLabel="Use workspace"
+            onSelectRow={selectWorkspace}
+          />
           <div className={styles.sectionSpacer}>
-            <OperationsPage title="Workspace access" description="Read-only workspace role-assignment inspection. Parameter forms and source paths are generated from the upstream MicrosoftFabricMgmt cmdlet." capabilities={workspaceAccessCapabilities} connected={connected} />
+            <OperationsPage title="Workspace access" description="Read-only workspace role-assignment inspection. The selected workspace context is prefilled automatically." capabilities={workspaceAccessCapabilities} connected={connected} defaultParameters={workspaceDefaults} />
           </div>
         </>
       );
     }
     if (section === 'Items') {
-      return <OperationsPage title="Items" description="Generic Fabric item inventory, item detail and item-connection reads sourced from official Items REST APIs. Requests are executed through the upstream MicrosoftFabricMgmt API helper." capabilities={itemCapabilities} connected={connected} />;
+      return <OperationsPage title="Items" description="Generic Fabric item inventory, item detail and item-connection reads sourced from official Items REST APIs. The selected workspace context is prefilled automatically." capabilities={itemCapabilities} connected={connected} defaultParameters={workspaceDefaults} />;
     }
     if (section === 'Runs & Schedules') {
-      return <OperationsPage title="Runs & Schedules" description="Read-only Job Scheduler operations from the official Fabric REST API. Job execution, cancellation and schedule writes remain disabled." capabilities={jobCapabilities} connected={connected} />;
+      return <OperationsPage title="Runs & Schedules" description="Read-only Job Scheduler operations from the official Fabric REST API. Job execution, cancellation and schedule writes remain disabled." capabilities={jobCapabilities} connected={connected} defaultParameters={workspaceDefaults} />;
     }
     if (section === 'Capacities') {
       return <InventoryPage title="Capacities" description="Live Fabric capacity inventory from the upstream MicrosoftFabricMgmt PowerShell module." connected={connected} capability={capacityCapability} fields={[{ key: 'id', label: 'ID' }, { key: 'sku', label: 'SKU' }, { key: 'region', label: 'Region' }, { key: 'state', label: 'State' }]} />;
@@ -265,7 +296,7 @@ export function App() {
       return <InventoryPage title="Connections" description="Live connection inventory from the upstream MicrosoftFabricMgmt Get-FabricConnection cmdlet. Fields are discovered from returned data so upstream additions remain visible without UI rewrites." connected={connected} capability={connectionCapability} />;
     }
     if (section === 'Deployment & Git') {
-      return <OperationsPage title="Deployment & Git" description="Read-only deployment-pipeline and Git operations. Git status uses Fabric's long-running-operation protocol through MicrosoftFabricMgmt -WaitForCompletion rather than a Studio-owned poller." capabilities={deploymentCapabilities} connected={connected} />;
+      return <OperationsPage title="Deployment & Git" description="Read-only deployment-pipeline and Git operations. Git status uses Fabric's long-running-operation protocol through MicrosoftFabricMgmt -WaitForCompletion rather than a Studio-owned poller." capabilities={deploymentCapabilities} connected={connected} defaultParameters={workspaceDefaults} />;
     }
     if (section === 'Security') {
       return <SpecializedToolsPage category="Security" description="Security troubleshooting remains an upstream specialized workflow because it crosses Fabric, Graph and SQL permission layers and emits a report bundle." />;
@@ -304,6 +335,8 @@ export function App() {
         <Button appearance="primary" disabled={connecting || !tenantId.trim()} onClick={handleConnect}>{connecting ? 'Connecting…' : 'Connect'}</Button>
         <Badge appearance={connected ? 'tint' : 'outline'}>{connected ? 'CONNECTED' : 'OFFLINE'}</Badge>
         <Text size={200} className={styles.connectionText}>{connectionText}</Text>
+        {workspaceContext && <Badge appearance="tint">Workspace: {workspaceContext.name}</Badge>}
+        {workspaceContext && <Button size="small" appearance="subtle" onClick={() => setWorkspaceContext(null)}>Clear workspace</Button>}
       </div>
 
       <div className={styles.body}>
