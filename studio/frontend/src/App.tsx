@@ -27,6 +27,7 @@ import {
 } from '@fluentui/react-icons';
 import { useEffect, useMemo, useState } from 'react';
 import { Capability, connectFabric, getCapabilities } from './api/client';
+import { CommandWorkbench } from './components/CommandWorkbench';
 import staticCapabilities from './data/capabilities.json';
 import { ActivityPage } from './pages/ActivityPage';
 import { InventoryPage } from './pages/InventoryPage';
@@ -64,7 +65,6 @@ const useStyles = makeStyles({
   stat: { padding: '16px' },
   sourceRow: { display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginTop: '8px' },
   search: { width: '340px' },
-  detail: { marginTop: '18px', padding: '18px', backgroundColor: tokens.colorNeutralBackground1, border: `1px solid ${tokens.colorNeutralStroke2}`, borderRadius: tokens.borderRadiusMedium },
   code: { display: 'block', padding: '10px 12px', backgroundColor: tokens.colorNeutralBackground3, borderRadius: tokens.borderRadiusMedium, fontFamily: 'Consolas, monospace', overflowWrap: 'anywhere' },
   muted: { color: tokens.colorNeutralForeground3 },
 });
@@ -137,7 +137,7 @@ export function App() {
         <div className={styles.hero}>
           <div>
             <Title1>PowerShell Library</Title1>
-            <Text block>Every operation declares its upstream source, provider, path and risk level.</Text>
+            <Text block>Search upstream Fabric management cmdlets, inspect their source and generate safe read-only forms from PowerShell metadata.</Text>
             <Text block className={styles.muted}>{catalog.length} capabilities across {categories} categories.</Text>
           </div>
           <Input className={styles.search} placeholder="Search command, category, provider or path" value={query} onChange={(_, data) => setQuery(data.value)} />
@@ -158,25 +158,13 @@ export function App() {
               {cap.command && <code className={styles.code}>{cap.command}</code>}
               {cap.endpoint && <code className={styles.code}>{cap.endpoint}</code>}
               <div className={styles.sourceRow}>
-                <Button size="small" onClick={() => setSelected(cap)}>Details</Button>
+                <Button size="small" onClick={() => setSelected(cap)}>{cap.risk === 'read' && cap.provider === 'MicrosoftFabricMgmt' ? 'Open / run' : 'Inspect'}</Button>
                 {cap.command && <Button size="small" appearance="secondary" onClick={() => copyCommand(cap)}>Copy PowerShell</Button>}
               </div>
             </Card>
           ))}
         </div>
-        {selected && (
-          <section className={styles.detail}>
-            <Subtitle1>{selected.title}</Subtitle1>
-            <Text block>{selected.description}</Text>
-            <div className={styles.sourceRow}>
-              <Badge appearance="outline">Feature provider: {selected.provider}</Badge>
-              <Badge appearance="outline">Risk: {selected.risk}</Badge>
-            </div>
-            {selected.source_path && <><Text block weight="semibold">Upstream source path</Text><code className={styles.code}>{selected.source_path}</code></>}
-            {selected.parameters && selected.parameters.length > 0 && <Text block>Parameters: {selected.parameters.join(', ')}</Text>}
-            <Text block className={styles.muted}>{selected.risk === 'read' && selected.provider === 'MicrosoftFabricMgmt' ? 'Read-only execution is enabled after tenant authentication.' : 'This operation remains non-executable in the current milestone.'}</Text>
-          </section>
-        )}
+        {selected && <CommandWorkbench capability={selected} connected={connected} onClose={() => setSelected(null)} />}
       </>
     );
   }
@@ -202,7 +190,7 @@ export function App() {
           <Card><CardHeader header={<Subtitle1>Workspace inventory</Subtitle1>} description="Run Get-FabricWorkspace through the upstream module." /><Button onClick={() => setSection('Workspaces')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Capacity inventory</Subtitle1>} description="Inspect Fabric capacities without changing state." /><Button onClick={() => setSection('Capacities')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Sources</Subtitle1>} description="See exactly which repo/module/API provides each capability." /><Button onClick={() => setSection('Sources')}>Open</Button></Card>
-          <Card><CardHeader header={<Subtitle1>PowerShell Library</Subtitle1>} description="Browse commands by Fabric resource and upstream source." /><Button onClick={() => setSection('PowerShell Library')}>Open library</Button></Card>
+          <Card><CardHeader header={<Subtitle1>PowerShell Library</Subtitle1>} description="Browse and preview commands by Fabric resource and upstream source." /><Button onClick={() => setSection('PowerShell Library')}>Open library</Button></Card>
         </div>
       </>
     );
