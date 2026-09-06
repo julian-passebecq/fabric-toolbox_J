@@ -1,5 +1,14 @@
 export type Risk = 'read' | 'write' | 'admin' | 'destructive';
 
+export type ParameterSpec = {
+  name: string;
+  type: string;
+  mandatory: boolean;
+  is_switch: boolean;
+  description?: string;
+  allowed_values: string[];
+};
+
 export type Capability = {
   id: string;
   title: string;
@@ -13,6 +22,19 @@ export type Capability = {
   source_path?: string;
   generated?: boolean;
   parameters?: string[];
+  parameter_specs?: ParameterSpec[];
+};
+
+export type ExecutionPreview = {
+  capability_id: string;
+  provider: string;
+  risk: Risk;
+  command?: string;
+  endpoint?: string;
+  rendered_command?: string;
+  transport?: string;
+  executable: boolean;
+  reason: string;
 };
 
 export type ExecutionResponse = {
@@ -84,7 +106,7 @@ export function executeCapability(capabilityId: string, parameters: Record<strin
 }
 
 export function previewCapability(capabilityId: string, parameters: Record<string, unknown> = {}) {
-  return request<Record<string, unknown>>(`/api/capabilities/${encodeURIComponent(capabilityId)}/preview`, {
+  return request<ExecutionPreview>(`/api/capabilities/${encodeURIComponent(capabilityId)}/preview`, {
     method: 'POST',
     body: JSON.stringify({ parameters }),
   });
