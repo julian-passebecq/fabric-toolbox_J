@@ -20,6 +20,7 @@ const useStyles = makeStyles({
   code: { display: 'block', padding: '8px 10px', marginTop: '8px', backgroundColor: tokens.colorNeutralBackground3, borderRadius: tokens.borderRadiusMedium, fontFamily: 'Consolas, monospace', overflowWrap: 'anywhere' },
   error: { color: tokens.colorPaletteRedForeground1 },
   muted: { color: tokens.colorNeutralForeground3 },
+  section: { marginTop: '28px', paddingTop: '20px', borderTop: `1px solid ${tokens.colorNeutralStroke2}` },
 });
 
 export function DiagnosticsPage() {
@@ -47,7 +48,7 @@ export function DiagnosticsPage() {
       <div className={styles.header}>
         <div>
           <Title1>Diagnostics</Title1>
-          <Text block>Local runtime readiness for Studio, upstream Fabric tooling, guarded writes and specialized workflows.</Text>
+          <Text block>Local runtime readiness for Studio, upstream Fabric tooling, guarded writes, source compatibility and specialized workflows.</Text>
         </div>
         <Button onClick={load}>Refresh</Button>
       </div>
@@ -61,6 +62,7 @@ export function DiagnosticsPage() {
             <Badge appearance="outline">Catalog {data.catalog.total}</Badge>
             <Badge appearance="tint">Guarded {data.catalog.policies['guarded-write'] ?? 0}</Badge>
             <Badge appearance="outline">Blocked {data.catalog.policies.blocked ?? 0}</Badge>
+            <Badge appearance={data.compatibility.status === 'compatible' ? 'tint' : 'filled'}>{data.compatibility.status.toUpperCase()}</Badge>
             <Badge appearance={data.session.connected ? 'tint' : 'outline'}>{data.session.connected ? 'FABRIC CONNECTED' : 'FABRIC OFFLINE'}</Badge>
           </div>
           <Text block className={styles.muted}>{data.platform}</Text>
@@ -75,6 +77,29 @@ export function DiagnosticsPage() {
               </Card>
             ))}
           </div>
+
+          <section className={styles.section}>
+            <Subtitle1>Capability compatibility</Subtitle1>
+            <Text block className={styles.muted}>Static audit of the combined catalog after upstream merges: duplicate IDs, broken verification references, guarded-write policy inconsistencies, REST endpoint shape and repository-local source paths.</Text>
+            <div className={styles.summary}>
+              <Badge appearance={data.compatibility.errors === 0 ? 'tint' : 'filled'}>{data.compatibility.errors} errors</Badge>
+              <Badge appearance={data.compatibility.warnings === 0 ? 'tint' : 'outline'}>{data.compatibility.warnings} warnings</Badge>
+              <Badge appearance="outline">{data.compatibility.local_sources_checked} source paths checked</Badge>
+              <Badge appearance="outline">{data.compatibility.local_sources_missing} missing</Badge>
+            </div>
+            <div className={styles.grid}>
+              {data.compatibility.issues.map((issue, index) => (
+                <Card key={`${issue.capability_id}-${index}`}>
+                  <CardHeader
+                    header={<Subtitle1>{issue.capability_id}</Subtitle1>}
+                    action={<Badge appearance={issue.severity === 'error' ? 'filled' : 'outline'}>{issue.severity.toUpperCase()}</Badge>}
+                  />
+                  <Text>{issue.message}</Text>
+                </Card>
+              ))}
+            </div>
+            {data.compatibility.issues.length === 0 && <Text block>No catalog compatibility issues detected.</Text>}
+          </section>
         </>
       )}
     </>
