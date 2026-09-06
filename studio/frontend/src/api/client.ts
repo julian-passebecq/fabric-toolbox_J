@@ -1,4 +1,5 @@
 export type Risk = 'read' | 'write' | 'admin' | 'destructive';
+export type ResponseMode = 'sync' | 'fabric-lro';
 
 export type ParameterSpec = {
   name: string;
@@ -16,6 +17,7 @@ export type Capability = {
   provider: string;
   source: string;
   risk: Risk;
+  response_mode?: ResponseMode;
   command?: string;
   endpoint?: string;
   description: string;
@@ -45,6 +47,14 @@ export type ExecutionResponse = {
   result: Record<string, unknown>;
 };
 
+export type SessionStatus = {
+  mode: 'read-only';
+  transport: string;
+  feature_provider: string;
+  connected: boolean;
+  tenant_id?: string;
+};
+
 export type SourceEntry = {
   id: string;
   name: string;
@@ -69,6 +79,42 @@ export type SourceRegistry = {
   excluded_from_product_surface?: Array<{ id: string; reason: string }>;
 };
 
+export type SpecializedTool = {
+  id: string;
+  name: string;
+  category: string;
+  upstream_path: string;
+  entrypoint: string;
+  execution_kind: string;
+  status: string;
+  risk: Risk;
+  description: string;
+  prerequisites: string[];
+  example: string;
+  reason: string;
+  available: boolean;
+};
+
+export type DiagnosticCheck = {
+  name: string;
+  ok: boolean;
+  required: boolean;
+  detail: string;
+};
+
+export type Diagnostics = {
+  status: 'ready' | 'degraded';
+  platform: string;
+  python: string;
+  session: SessionStatus;
+  catalog: {
+    total: number;
+    providers: Record<string, number>;
+    risks: Record<string, number>;
+  };
+  checks: DiagnosticCheck[];
+};
+
 export type ActivityRecord = Record<string, unknown> & { timestamp?: string; action?: string };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -91,6 +137,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function getCapabilities() {
   return request<Capability[]>('/api/capabilities');
+}
+
+export function getSession() {
+  return request<SessionStatus>('/api/session');
 }
 
 export function connectFabric(tenantId: string) {
@@ -120,4 +170,12 @@ export function getSources() {
 
 export function getActivity(limit = 200) {
   return request<ActivityRecord[]>(`/api/activity?limit=${limit}`);
+}
+
+export function getSpecializedTools() {
+  return request<SpecializedTool[]>('/api/tools');
+}
+
+export function getDiagnostics() {
+  return request<Diagnostics>('/api/diagnostics');
 }
