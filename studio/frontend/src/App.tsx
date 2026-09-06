@@ -26,22 +26,9 @@ import {
   Wrench24Regular,
 } from '@fluentui/react-icons';
 import { useEffect, useMemo, useState } from 'react';
+import { Capability, connectFabric, getCapabilities } from './api/client';
 import staticCapabilities from './data/capabilities.json';
-
-type Capability = {
-  id: string;
-  title: string;
-  category: string;
-  provider: string;
-  source: string;
-  risk: 'read' | 'write' | 'admin' | 'destructive';
-  command?: string;
-  endpoint?: string;
-  description: string;
-  source_path?: string;
-  generated?: boolean;
-  parameters?: string[];
-};
+import { InventoryPage } from './pages/InventoryPage';
 
 const nav = [
   ['Overview', AppsList24Regular],
@@ -60,8 +47,11 @@ const nav = [
 ] as const;
 
 const useStyles = makeStyles({
-  root: { minHeight: '100vh', display: 'grid', gridTemplateRows: '64px 1fr', backgroundColor: tokens.colorNeutralBackground2 },
+  root: { minHeight: '100vh', display: 'grid', gridTemplateRows: '64px 48px 1fr', backgroundColor: tokens.colorNeutralBackground2 },
   header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', backgroundColor: tokens.colorNeutralBackground1, borderBottom: `1px solid ${tokens.colorNeutralStroke2}` },
+  connectionBar: { display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 20px', backgroundColor: tokens.colorNeutralBackground1, borderBottom: `1px solid ${tokens.colorNeutralStroke2}` },
+  tenantInput: { width: '360px' },
+  connectionText: { marginLeft: '4px', color: tokens.colorNeutralForeground3 },
   body: { display: 'grid', gridTemplateColumns: '240px 1fr', minHeight: 0 },
   nav: { backgroundColor: tokens.colorNeutralBackground1, borderRight: `1px solid ${tokens.colorNeutralStroke2}`, padding: '12px 8px' },
   navButton: { width: '100%', justifyContent: 'flex-start', marginBottom: '4px' },
@@ -88,14 +78,14 @@ export function App() {
   const [catalog, setCatalog] = useState<Capability[]>(staticCapabilities as Capability[]);
   const [catalogState, setCatalogState] = useState<'loading' | 'live' | 'fallback'>('loading');
   const [selected, setSelected] = useState<Capability | null>(null);
+  const [tenantId, setTenantId] = useState('');
+  const [connected, setConnected] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [connectionText, setConnectionText] = useState('Not connected');
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/capabilities')
-      .then((response) => {
-        if (!response.ok) throw new Error(`Catalog request failed: ${response.status}`);
-        return response.json() as Promise<Capability[]>;
-      })
+    getCapabilities()
       .then((items) => {
         if (!cancelled) {
           setCatalog(items);
@@ -115,10 +105,33 @@ export function App() {
 
   const categories = useMemo(() => new Set(catalog.map((item) => item.category)).size, [catalog]);
   const showLibrary = section === 'PowerShell Library' || section === 'Sources';
+  const workspaceCapability = catalog.find((item) => item.id === 'ps-workspace-get-fabricworkspace');
+  const capacityCapability = catalog.find((item) => item.id === 'ps-capacity-get-fabriccapacity');
 
   async function copyCommand(cap: Capability) {
     if (!cap.command) return;
     await navigator.clipboard.writeText(cap.command);
+  }
+
+  async function handleConnect() {
+    if (!tenantId.trim()) return;
+    setConnecting(true);
+    setConnected(false);
+    setConnectionText('Opening Fabric authentication...');
+    try {
+      const result = await connectFabric(tenantId.trim());
+      if (result.success === false) throw new Error(String(result.error ?? 'Authentication failed'));
+      setConnected(true);
+      setConnectionText(`Connected to tenant ${tenantId.trim()}`);
+    } catch (err) {
+      setConnectionText(err instanceof Error ? err.message : String(err));
+    } finally {
+      setConnecting(false);
+    }
+  }
+
+  function placeholder() {
+    return <Card><CardHeader header={<Subtitle1>{section} module</Subtitle1>} description="This module will be connected to upstream providers without duplicating their implementation." /></Card>;
   }
 
   return (
@@ -129,11 +142,19 @@ export function App() {
           <Text size={200}>Management, operations and PowerShell</Text>
         </div>
         <div className={styles.sourceRow}>
-          <Badge appearance="outline">INSPECT</Badge>
+          <Badge appearance="outline">READ ONLY</Badge>
           <Badge appearance="filled">Provenance enabled</Badge>
           <Badge appearance="outline">Catalog: {catalogState}</Badge>
         </div>
       </header>
+
+      <div className={styles.connectionBar}>
+        <Text weight="semibold">Tenant</Text>
+        <Input className={styles.tenantInput} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" value={tenantId} onChange={(_, data) => setTenantId(data.value)} />
+        <Button appearance="primary" disabled={connecting || !tenantId.trim()} onClick={handleConnect}>{connecting ? 'Connecting…' : 'Connect'}</Button>
+        <Badge appearance={connected ? 'tint' : 'outline'}>{connected ? 'CONNECTED' : 'OFFLINE'}</Badge>
+        <Text size={200} className={styles.connectionText}>{connectionText}</Text>
+      </div>
 
       <div className={styles.body}>
         <nav className={styles.nav}>
@@ -145,7 +166,33 @@ export function App() {
         </nav>
 
         <main className={styles.main}>
-          {showLibrary ? (
+          {section === 'Workspaces' ? (
+            <InventoryPage
+              title="Workspaces"
+              description="Live workspace inventory from the upstream MicrosoftFabricMgmt PowerShell module."
+              connected={connected}
+              capability={workspaceCapability}
+              fields={[
+                { key: 'id', label: 'ID' },
+                { key: 'description', label: 'Description' },
+                { key: 'capacityId', label: 'Capacity ID' },
+                { key: 'CapacityName', label: 'Capacity' },
+              ]}
+            />
+          ) : section === 'Capacities' ? (
+            <InventoryPage
+              title="Capacities"
+              description="Live Fabric capacity inventory from the upstream MicrosoftFabricMgmt PowerShell module."
+              connected={connected}
+              capability={capacityCapability}
+              fields={[
+                { key: 'id', label: 'ID' },
+                { key: 'sku', label: 'SKU' },
+                { key: 'region', label: 'Region' },
+                { key: 'state', label: 'State' },
+              ]}
+            />
+          ) : showLibrary ? (
             <>
               <div className={styles.hero}>
                 <div>
@@ -182,44 +229,39 @@ export function App() {
                   <Subtitle1>{selected.title}</Subtitle1>
                   <Text block>{selected.description}</Text>
                   <div className={styles.sourceRow}>
-                    <Badge appearance="outline">Provider: {selected.provider}</Badge>
+                    <Badge appearance="outline">Feature provider: {selected.provider}</Badge>
                     <Badge appearance="outline">Risk: {selected.risk}</Badge>
                   </div>
                   {selected.source_path && <><Text block weight="semibold">Upstream source path</Text><code className={styles.code}>{selected.source_path}</code></>}
                   {selected.parameters && selected.parameters.length > 0 && <Text block>Parameters: {selected.parameters.join(', ')}</Text>}
-                  <Text block className={styles.muted}>Execution remains disabled until this provider passes preview, validation, redaction and activity-log requirements.</Text>
+                  <Text block className={styles.muted}>{selected.risk === 'read' && selected.provider === 'MicrosoftFabricMgmt' ? 'Read-only execution is enabled after tenant authentication.' : 'This operation remains non-executable in the current milestone.'}</Text>
                 </section>
               )}
             </>
-          ) : (
+          ) : section === 'Overview' ? (
             <>
               <div className={styles.hero}>
                 <div>
-                  <Title1>{section}</Title1>
+                  <Title1>Overview</Title1>
                   <Text block>Operational control plane for Microsoft Fabric.</Text>
                 </div>
               </div>
-              {section === 'Overview' && (
-                <>
-                  <div className={styles.stats}>
-                    {[['Catalog capabilities', String(catalog.length)], ['Capability groups', String(categories)], ['Execution mode', 'Inspect'], ['Upstream changes', 'Trackable']].map(([label, value]) => (
-                      <Card key={label} className={styles.stat}>
-                        <Subtitle1>{value}</Subtitle1>
-                        <Text>{label}</Text>
-                      </Card>
-                    ))}
-                  </div>
-                  <div className={styles.cards}>
-                    <Card><CardHeader header={<Subtitle1>Inventory tenant</Subtitle1>} description="List reachable workspaces and Fabric items." /><Button>Preview operation</Button></Card>
-                    <Card><CardHeader header={<Subtitle1>Check failed jobs</Subtitle1>} description="Review recent failed item job instances." /><Button>Preview operation</Button></Card>
-                    <Card><CardHeader header={<Subtitle1>Audit workspace security</Subtitle1>} description="Launch the upstream Fabric Security Audit tool." /><Button>Preview operation</Button></Card>
-                    <Card><CardHeader header={<Subtitle1>PowerShell Library</Subtitle1>} description="Browse commands by Fabric resource and upstream source." /><Button onClick={() => setSection('PowerShell Library')}>Open library</Button></Card>
-                  </div>
-                </>
-              )}
-              {section !== 'Overview' && <Card><CardHeader header={<Subtitle1>{section} module</Subtitle1>} description="This module will be connected to upstream providers without duplicating their implementation." /></Card>}
+              <div className={styles.stats}>
+                {[['Catalog capabilities', String(catalog.length)], ['Capability groups', String(categories)], ['Execution mode', 'Read only'], ['Fabric session', connected ? 'Connected' : 'Offline']].map(([label, value]) => (
+                  <Card key={label} className={styles.stat}>
+                    <Subtitle1>{value}</Subtitle1>
+                    <Text>{label}</Text>
+                  </Card>
+                ))}
+              </div>
+              <div className={styles.cards}>
+                <Card><CardHeader header={<Subtitle1>Workspace inventory</Subtitle1>} description="Run Get-FabricWorkspace through the upstream module." /><Button onClick={() => setSection('Workspaces')}>Open</Button></Card>
+                <Card><CardHeader header={<Subtitle1>Capacity inventory</Subtitle1>} description="Inspect Fabric capacities without changing state." /><Button onClick={() => setSection('Capacities')}>Open</Button></Card>
+                <Card><CardHeader header={<Subtitle1>Audit workspace security</Subtitle1>} description="Specialized upstream Fabric Security Audit integration is planned next." /><Button disabled>Planned</Button></Card>
+                <Card><CardHeader header={<Subtitle1>PowerShell Library</Subtitle1>} description="Browse commands by Fabric resource and upstream source." /><Button onClick={() => setSection('PowerShell Library')}>Open library</Button></Card>
+              </div>
             </>
-          )}
+          ) : placeholder()}
         </main>
       </div>
     </div>
