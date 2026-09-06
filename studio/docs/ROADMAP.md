@@ -7,24 +7,30 @@
 - [x] Fluent UI shell
 - [x] PowerShell Library surface
 - [x] automatic MicrosoftFabricMgmt command discovery
-- [x] inspect-only capability API
+- [x] PowerShell parameter/type/help discovery
+- [x] capability discovery and safety tests
+- [x] frontend catalog connected to backend API with static fallback
 - [x] Windows launcher
-- [ ] capability discovery tests
-- [ ] connect frontend catalog to backend API instead of static fallback
 
 ## Milestone 2 - read-only operations
 
-- workspace inventory
-- item inventory by workspace and type
-- capacities and workspace assignments
-- connections inventory
-- job/run history
-- schedule inventory
-- deployment pipeline inventory
-- Git status inventory
-- activity log
+- [x] interactive Fabric tenant authentication through `Connect-FabricAccount`
+- [x] workspace inventory
+- [x] generic item inventory by workspace, with optional type/root-folder filters
+- [x] capacity inventory
+- [x] connections inventory
+- [x] item job/run history
+- [x] schedule inventory
+- [x] deployment pipeline inventory/stages/operations through upstream cmdlets
+- [x] workspace Git connection discovery through upstream cmdlet
+- [x] local activity log with sensitive-field redaction
+- [x] registered official Fabric REST GET provider via `Invoke-FabricAPIRequest`
+- [ ] workspace-to-capacity assignment inventory/detail view
+- [ ] Git status inventory
+- [ ] generic long-running-operation support for REST APIs returning `202 Accepted`
+- [ ] richer tabular result viewer for REST responses
 
-Only read-only commands are executable in this milestone.
+Only read-only operations are executable in this milestone. Git status is deliberately deferred because the official API can return a long-running operation and Studio does not yet pretend that a simple GET wrapper handles that correctly.
 
 ## Milestone 3 - guarded writes
 
