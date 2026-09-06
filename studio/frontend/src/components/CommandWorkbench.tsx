@@ -18,6 +18,7 @@ import {
   executeCapability,
   previewCapability,
 } from '../api/client';
+import { ResultViewer } from './ResultViewer';
 
 const useStyles = makeStyles({
   root: {
@@ -40,15 +41,6 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground3,
     borderRadius: tokens.borderRadiusMedium,
     fontFamily: 'Consolas, monospace',
-  },
-  result: {
-    maxHeight: '360px',
-    overflow: 'auto',
-    padding: '12px',
-    backgroundColor: tokens.colorNeutralBackground3,
-    borderRadius: tokens.borderRadiusMedium,
-    fontFamily: 'Consolas, monospace',
-    fontSize: '12px',
   },
   error: { color: tokens.colorPaletteRedForeground1, marginTop: '10px' },
   muted: { color: tokens.colorNeutralForeground3 },
@@ -256,12 +248,7 @@ export function CommandWorkbench({ capability, connected, defaultParameters = {}
         </div>
       )}
 
-      {result && (
-        <div>
-          <Text block weight="semibold">Result</Text>
-          <pre className={styles.result}>{JSON.stringify(result, null, 2)}</pre>
-        </div>
-      )}
+      {result && <ResultViewer result={result} fileName={`fabric-${capability.id}.json`} />}
     </section>
   );
 }
