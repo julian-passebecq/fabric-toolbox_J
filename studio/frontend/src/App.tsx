@@ -25,17 +25,22 @@ import {
   Timeline24Regular,
   Wrench24Regular,
 } from '@fluentui/react-icons';
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Capability, connectFabric, getCapabilities, getSession } from './api/client';
 import { CommandWorkbench } from './components/CommandWorkbench';
 import staticCapabilities from './data/capabilities.json';
-import { ActivityPage } from './pages/ActivityPage';
-import { ChangePlansPage } from './pages/ChangePlansPage';
-import { DiagnosticsPage } from './pages/DiagnosticsPage';
 import { InventoryPage } from './pages/InventoryPage';
 import { OperationsPage } from './pages/OperationsPage';
-import { SourcesPage } from './pages/SourcesPage';
-import { SpecializedToolsPage } from './pages/SpecializedToolsPage';
+import type { ItemContext } from './pages/ItemExplorerPage';
+
+const ActivityPage = lazy(() => import('./pages/ActivityPage').then((module) => ({ default: module.ActivityPage })));
+const ChangePlansPage = lazy(() => import('./pages/ChangePlansPage').then((module) => ({ default: module.ChangePlansPage })));
+const DiagnosticsPage = lazy(() => import('./pages/DiagnosticsPage').then((module) => ({ default: module.DiagnosticsPage })));
+const ItemExplorerPage = lazy(() => import('./pages/ItemExplorerPage').then((module) => ({ default: module.ItemExplorerPage })));
+const SourcesPage = lazy(() => import('./pages/SourcesPage').then((module) => ({ default: module.SourcesPage })));
+const SpecializedToolsPage = lazy(() => import('./pages/SpecializedToolsPage').then((module) => ({ default: module.SpecializedToolsPage })));
+
+type WorkspaceContext = { id: string; name: string };
 
 const nav = [
   ['Overview', AppsList24Regular],
@@ -67,7 +72,7 @@ const useStyles = makeStyles({
   main: { padding: '24px', overflow: 'auto' },
   hero: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', gap: '24px' },
   cards: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: '14px', marginTop: '16px' },
-  stats: { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(120px, 1fr))', gap: '12px', margin: '20px 0 28px' },
+  stats: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', gap: '12px', margin: '20px 0 28px' },
   stat: { padding: '16px' },
   sourceRow: { display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginTop: '8px' },
   search: { width: '340px' },
@@ -111,7 +116,8 @@ export function App() {
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [connectionText, setConnectionText] = useState('Not connected');
-  const [workspaceContext, setWorkspaceContext] = useState<{ id: string; name: string } | null>(null);
+  const [workspaceContext, setWorkspaceContext] = useState<WorkspaceContext | null>(null);
+  const [itemContext, setItemContext] = useState<ItemContext | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -156,6 +162,12 @@ export function App() {
     workspaceDefaults.WorkspaceId = workspaceContext.id;
   }
 
+  const itemDefaults: Record<string, string | boolean> = { ...workspaceDefaults };
+  if (itemContext) {
+    itemDefaults.itemId = itemContext.id;
+    itemDefaults.ItemId = itemContext.id;
+  }
+
   const categories = useMemo(() => new Set(catalog.map((item) => item.category)).size, [catalog]);
   const guardedWriteCount = useMemo(() => catalog.filter(isGuardedWrite).length, [catalog]);
   const workspaceCapability = catalog.find((item) => item.id === 'ps-workspace-get-fabricworkspace');
@@ -163,7 +175,6 @@ export function App() {
   const workspaceWriteCapabilities = catalog.filter((item) => ['ps-workspace-new-fabricworkspace', 'ps-workspace-update-fabricworkspace'].includes(item.id));
   const capacityCapability = catalog.find((item) => item.id === 'ps-capacity-get-fabriccapacity');
   const connectionCapability = catalog.find((item) => item.id === 'ps-connections-get-fabricconnection');
-  const itemCapabilities = catalog.filter((item) => ['rest-items-list', 'rest-item-get', 'rest-item-connections-list'].includes(item.id));
   const jobCapabilities = catalog.filter((item) => ['rest-job-instances-list', 'rest-schedules-list'].includes(item.id));
   const deploymentCapabilities = catalog.filter((item) => item.id === 'rest-git-status' || [
     'Get-FabricDeploymentPipeline',
@@ -182,6 +193,7 @@ export function App() {
     const id = rowValue(row, ['id', 'Id', 'workspaceId', 'WorkspaceId']);
     if (!id) return;
     const name = rowValue(row, ['displayName', 'DisplayName', 'name', 'Name']) || id;
+    if (workspaceContext?.id !== id) setItemContext(null);
     setWorkspaceContext({ id, name });
   }
 
@@ -190,6 +202,7 @@ export function App() {
     setConnecting(true);
     setConnected(false);
     setWorkspaceContext(null);
+    setItemContext(null);
     setConnectionText('Opening Fabric authentication...');
     try {
       const result = await connectFabric(tenantId.trim());
@@ -241,7 +254,7 @@ export function App() {
             </Card>
           ))}
         </div>
-        {selected && <CommandWorkbench capability={selected} connected={connected} defaultParameters={workspaceDefaults} onClose={() => setSelected(null)} />}
+        {selected && <CommandWorkbench capability={selected} connected={connected} defaultParameters={itemContext ? itemDefaults : workspaceDefaults} onClose={() => setSelected(null)} />}
       </>
     );
   }
@@ -256,7 +269,13 @@ export function App() {
           </div>
         </div>
         <div className={styles.stats}>
-          {[['Catalog capabilities', String(catalog.length)], ['Guarded writes', String(guardedWriteCount)], ['Execution mode', 'Read + guarded'], ['Workspace context', workspaceContext?.name ?? 'None']].map(([label, value]) => (
+          {[
+            ['Catalog capabilities', String(catalog.length)],
+            ['Guarded writes', String(guardedWriteCount)],
+            ['Execution mode', 'Read + guarded'],
+            ['Workspace context', workspaceContext?.name ?? 'None'],
+            ['Item context', itemContext?.name ?? 'None'],
+          ].map(([label, value]) => (
             <Card key={label} className={styles.stat}>
               <Subtitle1>{value}</Subtitle1>
               <Text>{label}</Text>
@@ -266,8 +285,8 @@ export function App() {
         <div className={styles.cards}>
           <Card><CardHeader header={<Subtitle1>Workspace inventory & changes</Subtitle1>} description="Inventory workspaces and use guarded plans for the explicitly allowlisted create/update operations." /><Button onClick={() => setSection('Workspaces')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Change Plans</Subtitle1>} description="Review tenant-bound, expiring, single-use mutation plans created in the current backend session." /><Button onClick={() => setSection('Change Plans')}>Open</Button></Card>
-          <Card><CardHeader header={<Subtitle1>Items</Subtitle1>} description="List items, retrieve item details and inspect item connections through official Fabric APIs." /><Button onClick={() => setSection('Items')}>Open</Button></Card>
-          <Card><CardHeader header={<Subtitle1>Runs & schedules</Subtitle1>} description="Inspect item job instances and schedules through the official Job Scheduler API." /><Button onClick={() => setSection('Runs & Schedules')}>Open</Button></Card>
+          <Card><CardHeader header={<Subtitle1>Item explorer</Subtitle1>} description="Select an item once and inherit its workspace/item IDs across detail, connection, job and schedule operations." /><Button onClick={() => setSection('Items')}>Open</Button></Card>
+          <Card><CardHeader header={<Subtitle1>Runs & schedules</Subtitle1>} description="Inspect item job instances and schedules with selected workspace/item context prefilled." /><Button onClick={() => setSection('Runs & Schedules')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Capacity inventory</Subtitle1>} description="Inspect Fabric capacities without changing state." /><Button onClick={() => setSection('Capacities')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Connection inventory</Subtitle1>} description="Run Get-FabricConnection through the upstream module." /><Button onClick={() => setSection('Connections')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Deployment & Git</Subtitle1>} description="Inspect deployment pipelines, Git connections and LRO-aware workspace Git status." /><Button onClick={() => setSection('Deployment & Git')}>Open</Button></Card>
@@ -293,6 +312,7 @@ export function App() {
             fields={[{ key: 'id', label: 'ID' }, { key: 'description', label: 'Description' }, { key: 'capacityId', label: 'Capacity ID' }, { key: 'CapacityName', label: 'Capacity' }]}
             selectedRowId={workspaceContext?.id}
             selectLabel="Use workspace"
+            recentScope="workspaces"
             onSelectRow={selectWorkspace}
           />
           <div className={styles.sectionSpacer}>
@@ -312,10 +332,20 @@ export function App() {
     }
     if (section === 'Change Plans') return <ChangePlansPage />;
     if (section === 'Items') {
-      return <OperationsPage title="Items" description="Generic Fabric item inventory, item detail and item-connection reads sourced from official Items REST APIs. The selected workspace context is prefilled automatically." capabilities={itemCapabilities} connected={connected} defaultParameters={workspaceDefaults} />;
+      return (
+        <ItemExplorerPage
+          connected={connected}
+          workspaceContext={workspaceContext}
+          itemContext={itemContext}
+          catalog={catalog}
+          onSelectItem={setItemContext}
+          onClearItem={() => setItemContext(null)}
+          onOpenRuns={() => setSection('Runs & Schedules')}
+        />
+      );
     }
     if (section === 'Runs & Schedules') {
-      return <OperationsPage title="Runs & Schedules" description="Read-only Job Scheduler operations from the official Fabric REST API. Job execution, cancellation and schedule writes remain disabled." capabilities={jobCapabilities} connected={connected} defaultParameters={workspaceDefaults} />;
+      return <OperationsPage title="Runs & Schedules" description="Read-only Job Scheduler operations from the official Fabric REST API. Selected workspace/item context is prefilled automatically; job execution, cancellation and schedule writes remain disabled." capabilities={jobCapabilities} connected={connected} defaultParameters={itemDefaults} />;
     }
     if (section === 'Capacities') {
       return <InventoryPage title="Capacities" description="Live Fabric capacity inventory from the upstream MicrosoftFabricMgmt PowerShell module." connected={connected} capability={capacityCapability} fields={[{ key: 'id', label: 'ID' }, { key: 'sku', label: 'SKU' }, { key: 'region', label: 'Region' }, { key: 'state', label: 'State' }]} />;
@@ -365,7 +395,9 @@ export function App() {
         <Badge appearance={connected ? 'tint' : 'outline'}>{connected ? 'CONNECTED' : 'OFFLINE'}</Badge>
         <Text size={200} className={styles.connectionText}>{connectionText}</Text>
         {workspaceContext && <Badge appearance="tint">Workspace: {workspaceContext.name}</Badge>}
-        {workspaceContext && <Button size="small" appearance="subtle" onClick={() => setWorkspaceContext(null)}>Clear workspace</Button>}
+        {itemContext && <Badge appearance="tint">Item: {itemContext.name}</Badge>}
+        {itemContext && <Button size="small" appearance="subtle" onClick={() => setItemContext(null)}>Clear item</Button>}
+        {workspaceContext && <Button size="small" appearance="subtle" onClick={() => { setWorkspaceContext(null); setItemContext(null); }}>Clear workspace</Button>}
       </div>
 
       <div className={styles.body}>
@@ -376,7 +408,11 @@ export function App() {
             </Button>
           ))}
         </nav>
-        <main className={styles.main}>{renderSection()}</main>
+        <main className={styles.main}>
+          <Suspense fallback={<Spinner label="Loading Studio module" />}>
+            {renderSection()}
+          </Suspense>
+        </main>
       </div>
     </div>
   );
