@@ -19,6 +19,7 @@ const SELECTION_KEY_PREFIX = 'fabric-ops-studio.selected-operation.v1:';
 const useStyles = makeStyles({
   header: { marginBottom: '18px' },
   toolbar: { display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', margin: '10px 0 16px' },
+  context: { display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', padding: '10px 12px', marginBottom: '16px', border: `1px solid ${tokens.colorNeutralStroke2}`, borderRadius: tokens.borderRadiusMedium, backgroundColor: tokens.colorNeutralBackground2 },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '12px' },
   badges: { display: 'flex', gap: '8px', flexWrap: 'wrap', margin: '8px 0' },
   actions: { display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' },
@@ -47,6 +48,12 @@ function selectionKey(title: string) {
   return `${SELECTION_KEY_PREFIX}${title.toLowerCase().replace(/\s+/g, '-')}`;
 }
 
+function compactValue(value: string | boolean): string {
+  const text = String(value);
+  if (text.length <= 22) return text;
+  return `${text.slice(0, 8)}…${text.slice(-8)}`;
+}
+
 export function OperationsPage({ title, description, capabilities, connected, defaultParameters = {} }: OperationsPageProps) {
   const styles = useStyles();
   const [selected, setSelected] = useState<Capability | null>(null);
@@ -65,6 +72,23 @@ export function OperationsPage({ title, description, capabilities, connected, de
     () => favoritesOnly ? capabilities.filter((capability) => favoriteIds.includes(capability.id)) : capabilities,
     [capabilities, favoriteIds, favoritesOnly],
   );
+
+  const inheritedContext = useMemo(() => {
+    if (!selected) return [] as Array<[string, string | boolean]>;
+    const accepted = new Set((selected.parameter_specs ?? []).map((parameter) => parameter.name));
+    return Object.entries(defaultParameters).filter(([name, value]) => accepted.has(name) && value !== '' && value !== false);
+  }, [defaultParameters, selected]);
+
+  const missingRequired = useMemo(() => {
+    if (!selected) return [];
+    return (selected.parameter_specs ?? [])
+      .filter((parameter) => parameter.mandatory)
+      .filter((parameter) => {
+        const value = defaultParameters[parameter.name];
+        return value === undefined || value === '' || value === false;
+      })
+      .map((parameter) => parameter.name);
+  }, [defaultParameters, selected]);
 
   function choose(capability: Capability) {
     setSelected(capability);
@@ -94,6 +118,18 @@ export function OperationsPage({ title, description, capabilities, connected, de
         </Button>
         <Text className={styles.muted}>{favoriteIds.filter((id) => capabilities.some((capability) => capability.id === id)).length} favorite operation(s) on this page</Text>
       </div>
+
+      {selected && (inheritedContext.length > 0 || missingRequired.length > 0) && (
+        <div className={styles.context}>
+          <Text weight="semibold">Selected operation context</Text>
+          {inheritedContext.map(([name, value]) => (
+            <Badge key={name} appearance="tint">{name}: {compactValue(value)}</Badge>
+          ))}
+          {missingRequired.map((name) => (
+            <Badge key={name} appearance="outline">Enter {name}</Badge>
+          ))}
+        </div>
+      )}
 
       <div className={styles.grid}>
         {visibleCapabilities.map((capability) => {
