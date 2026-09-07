@@ -8,7 +8,6 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined;
-          if (id.includes('/@fluentui/react-icons/')) return 'vendor-fluent-icons';
           if (id.includes('/@fluentui/') || id.includes('/@griffel/')) return 'vendor-fluent';
           if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/')) return 'vendor-react';
           return 'vendor';
