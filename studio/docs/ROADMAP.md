@@ -90,21 +90,26 @@ Specialized tools keep their own authentication, dependency and output lifecycle
 ## Milestone 5 - operator ergonomics
 
 - [x] persisted recent workspace contexts without storing credentials, scoped by Fabric tenant
-- [ ] richer item-to-run navigation so item IDs can be selected rather than pasted
+- [x] workspace-scoped item context so item IDs can be selected once and reused in item details, connections, runs and schedules
+- [x] selected item is invalidated automatically when workspace context changes
+- [x] recent item selections stored per tenant + workspace, without credentials or tokens
+- [x] inherited operation parameters and remaining mandatory inputs are visible before execution
 - [x] result filtering/sorting and CSV export
 - [x] saved operation favorites and per-page last selection in browser-local storage
 - [x] persisted mutation history across backend restarts by reconstructing from the redacted activity log rather than persisting live approval plans
 - [x] capability compatibility report after upstream merges
 - [x] searchable/exportable activity log with JSON and JSONL output
+- [x] lazy-loaded secondary UI modules and stable React/Fluent vendor chunking
 - [ ] optional update check against upstream Fabric Toolbox and Fabric REST specifications
 
 ## Next high-value pass
 
-- item context: select an item once and reuse `itemId` in runs, schedules, connections and future guarded item operations
-- guarded job cancellation/retry only after endpoint semantics and idempotency are reviewed
-- report-bundle browsing for Fabric Security Audit and Assessment outputs
+- guarded Security Audit launcher plus report-bundle browser, preserving the upstream script and its permission boundary
+- guarded Assessment launcher plus output browser, preserving `fat assess` as the execution source
+- item/job drill-down from a returned run row into the relevant operation context
 - compatibility baseline/diff between Studio versions rather than current-state audit only
 - optional upstream update signal without auto-mutating the fork
+- review job cancellation/retry semantics and idempotency before deciding whether either belongs in the guarded-write allowlist
 
 ## Non-goals
 
