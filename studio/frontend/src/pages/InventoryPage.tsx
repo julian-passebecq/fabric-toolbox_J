@@ -13,7 +13,8 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { Capability, executeCapability, getSession } from '../api/client';
 
-const RECENT_SELECTIONS_KEY = 'fabric-ops-studio.recent-inventory-selections.v1';
+const RECENT_SELECTIONS_KEY = 'fabric-ops-studio.recent-inventory-selections.v2';
+const LEGACY_RECENT_SELECTIONS_KEY = 'fabric-ops-studio.recent-inventory-selections.v1';
 
 const useStyles = makeStyles({
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', marginBottom: '18px' },
@@ -27,23 +28,41 @@ const useStyles = makeStyles({
 });
 
 type InventoryField = { key: string; label: string };
-type RecentSelection = { tenantId: string; id: string; name: string; usedAt: string };
+type RecentSelection = {
+  tenantId: string;
+  scope: string;
+  id: string;
+  name: string;
+  type?: string;
+  usedAt: string;
+};
 
 type InventoryPageProps = {
   title: string;
   description: string;
   connected: boolean;
   capability?: Capability;
+  parameters?: Record<string, unknown>;
   fields?: InventoryField[];
   selectedRowId?: string;
   selectLabel?: string;
+  recentScope?: string;
+  recentLabel?: string;
   onSelectRow?: (row: Record<string, unknown>) => void;
 };
 
 function normaliseRows(result: Record<string, unknown>): Record<string, unknown>[] {
   const payload = result.output ?? result;
   if (Array.isArray(payload)) return payload.filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null);
-  if (payload && typeof payload === 'object') return [payload as Record<string, unknown>];
+  if (payload && typeof payload === 'object') {
+    const object = payload as Record<string, unknown>;
+    for (const key of ['value', 'items', 'data', 'results']) {
+      if (Array.isArray(object[key])) {
+        return object[key].filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null);
+      }
+    }
+    return [object];
+  }
   return [];
 }
 
@@ -79,18 +98,49 @@ function discoverFields(rows: Record<string, unknown>[]): InventoryField[] {
   return primitive.filter((key) => !['displayName', 'DisplayName', 'name', 'Name'].includes(key)).slice(0, 7).map((key) => ({ key, label: titleCase(key) }));
 }
 
-function readRecentSelections(): RecentSelection[] {
+function parseRecentSelections(raw: string | null, legacy = false): RecentSelection[] {
   try {
-    const parsed = JSON.parse(localStorage.getItem(RECENT_SELECTIONS_KEY) ?? '[]');
-    return Array.isArray(parsed)
-      ? parsed.filter((item): item is RecentSelection => Boolean(item && typeof item.tenantId === 'string' && typeof item.id === 'string' && typeof item.name === 'string'))
-      : [];
+    const parsed = JSON.parse(raw ?? '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((item): RecentSelection[] => {
+      if (!item || typeof item !== 'object') return [];
+      const value = item as Record<string, unknown>;
+      if (typeof value.tenantId !== 'string' || typeof value.id !== 'string' || typeof value.name !== 'string') return [];
+      return [{
+        tenantId: value.tenantId,
+        scope: typeof value.scope === 'string' ? value.scope : legacy ? 'workspaces' : 'default',
+        id: value.id,
+        name: value.name,
+        type: typeof value.type === 'string' ? value.type : undefined,
+        usedAt: typeof value.usedAt === 'string' ? value.usedAt : '',
+      }];
+    });
   } catch {
     return [];
   }
 }
 
-export function InventoryPage({ title, description, connected, capability, fields, selectedRowId, selectLabel = 'Use', onSelectRow }: InventoryPageProps) {
+function readRecentSelections(): RecentSelection[] {
+  const current = parseRecentSelections(localStorage.getItem(RECENT_SELECTIONS_KEY));
+  if (current.length > 0) return current;
+  const legacy = parseRecentSelections(localStorage.getItem(LEGACY_RECENT_SELECTIONS_KEY), true);
+  if (legacy.length > 0) localStorage.setItem(RECENT_SELECTIONS_KEY, JSON.stringify(legacy));
+  return legacy;
+}
+
+export function InventoryPage({
+  title,
+  description,
+  connected,
+  capability,
+  parameters = {},
+  fields,
+  selectedRowId,
+  selectLabel = 'Use',
+  recentScope = 'workspaces',
+  recentLabel = 'Recent for this tenant',
+  onSelectRow,
+}: InventoryPageProps) {
   const styles = useStyles();
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [renderedCommand, setRenderedCommand] = useState('');
@@ -98,11 +148,19 @@ export function InventoryPage({ title, description, connected, capability, field
   const [error, setError] = useState('');
   const [tenantId, setTenantId] = useState('');
   const [recentSelections, setRecentSelections] = useState<RecentSelection[]>(() => readRecentSelections());
+  const parameterSignature = JSON.stringify(parameters);
   const visibleFields = useMemo(() => fields && fields.length > 0 ? fields : discoverFields(rows), [fields, rows]);
   const tenantRecent = useMemo(
-    () => tenantId ? recentSelections.filter((item) => item.tenantId === tenantId).slice(0, 6) : [],
-    [recentSelections, tenantId],
+    () => tenantId ? recentSelections.filter((item) => item.tenantId === tenantId && item.scope === recentScope).slice(0, 6) : [],
+    [recentScope, recentSelections, tenantId],
   );
+  const missingRequired = useMemo(() => {
+    if (!capability?.parameter_specs) return [];
+    return capability.parameter_specs
+      .filter((parameter) => parameter.mandatory)
+      .filter((parameter) => parameters[parameter.name] === undefined || parameters[parameter.name] === null || parameters[parameter.name] === '')
+      .map((parameter) => parameter.name);
+  }, [capability, parameterSignature]);
 
   useEffect(() => {
     if (!onSelectRow || !connected) return;
@@ -113,12 +171,18 @@ export function InventoryPage({ title, description, connected, capability, field
     return () => { cancelled = true; };
   }, [connected, onSelectRow]);
 
+  useEffect(() => {
+    setRows([]);
+    setRenderedCommand('');
+    setError('');
+  }, [parameterSignature, capability?.id]);
+
   async function load() {
-    if (!capability) return;
+    if (!capability || missingRequired.length > 0) return;
     setLoading(true);
     setError('');
     try {
-      const response = await executeCapability(capability.id);
+      const response = await executeCapability(capability.id, parameters);
       setRenderedCommand(response.rendered_command);
       setRows(normaliseRows(response.result));
     } catch (err) {
@@ -131,23 +195,24 @@ export function InventoryPage({ title, description, connected, capability, field
   function selectRow(row: Record<string, unknown>) {
     onSelectRow?.(row);
     if (!tenantId) return;
-    const rawId = row.id ?? row.Id ?? row.workspaceId ?? row.WorkspaceId;
+    const rawId = row.id ?? row.Id ?? row.workspaceId ?? row.WorkspaceId ?? row.itemId ?? row.ItemId;
     if (rawId === null || rawId === undefined) return;
     const id = String(rawId);
     const name = displayValue(row.displayName ?? row.DisplayName ?? row.name ?? row.Name ?? id);
+    const type = row.type ?? row.Type ?? row.itemType ?? row.ItemType;
     setRecentSelections((current) => {
       const next = [
-        { tenantId, id, name, usedAt: new Date().toISOString() },
-        ...current.filter((item) => !(item.tenantId === tenantId && item.id === id)),
-      ].slice(0, 24);
+        { tenantId, scope: recentScope, id, name, type: type === null || type === undefined ? undefined : String(type), usedAt: new Date().toISOString() },
+        ...current.filter((item) => !(item.tenantId === tenantId && item.scope === recentScope && item.id === id)),
+      ].slice(0, 40);
       localStorage.setItem(RECENT_SELECTIONS_KEY, JSON.stringify(next));
       return next;
     });
   }
 
   function useRecent(selection: RecentSelection) {
-    const liveRow = rows.find((row) => String(row.id ?? row.Id ?? row.workspaceId ?? row.WorkspaceId ?? '') === selection.id);
-    const row = liveRow ?? { id: selection.id, displayName: selection.name };
+    const liveRow = rows.find((row) => String(row.id ?? row.Id ?? row.workspaceId ?? row.WorkspaceId ?? row.itemId ?? row.ItemId ?? '') === selection.id);
+    const row = liveRow ?? { id: selection.id, displayName: selection.name, type: selection.type };
     onSelectRow?.(row);
   }
 
@@ -158,7 +223,7 @@ export function InventoryPage({ title, description, connected, capability, field
           <Title1>{title}</Title1>
           <Text block>{description}</Text>
         </div>
-        <Button appearance="primary" disabled={!connected || !capability || loading} onClick={load}>
+        <Button appearance="primary" disabled={!connected || !capability || loading || missingRequired.length > 0} onClick={load}>
           Refresh
         </Button>
       </div>
@@ -170,14 +235,14 @@ export function InventoryPage({ title, description, connected, capability, field
             <Badge appearance="outline">Source: {capability.source}</Badge>
             <Badge appearance="tint">READ ONLY</Badge>
           </div>
-          <code className={styles.code}>{capability.command}</code>
+          <code className={styles.code}>{capability.command ?? capability.endpoint}</code>
           {capability.source_path && <Text block className={styles.muted}>{capability.source_path}</Text>}
         </>
       )}
 
       {onSelectRow && tenantRecent.length > 0 && (
         <div className={styles.recent}>
-          <Text weight="semibold">Recent for this tenant</Text>
+          <Text weight="semibold">{recentLabel}</Text>
           {tenantRecent.map((selection) => (
             <Button key={selection.id} size="small" appearance={selectedRowId === selection.id ? 'primary' : 'secondary'} onClick={() => useRecent(selection)}>
               {selection.name}
@@ -187,14 +252,15 @@ export function InventoryPage({ title, description, connected, capability, field
       )}
 
       {!connected && <Text block className={styles.muted}>Connect to a Fabric tenant using the bar above before running inventory.</Text>}
+      {connected && missingRequired.length > 0 && <Text block className={styles.muted}>Select the required context first: {missingRequired.join(', ')}.</Text>}
       {loading && <Spinner label={`Loading ${title.toLowerCase()}`} />}
       {error && <Text block className={styles.error}>{error}</Text>}
       {renderedCommand && <Text block className={styles.muted}>Executed: {renderedCommand}</Text>}
-      {!loading && rows.length === 0 && connected && <Text block className={styles.muted}>No results loaded yet. Use Refresh to query the upstream provider.</Text>}
+      {!loading && rows.length === 0 && connected && missingRequired.length === 0 && <Text block className={styles.muted}>No results loaded yet. Use Refresh to query the upstream provider.</Text>}
 
       <div className={styles.grid}>
         {rows.map((row, index) => {
-          const rawId = row.id ?? row.Id;
+          const rawId = row.id ?? row.Id ?? row.itemId ?? row.ItemId;
           const rowId = rawId === null || rawId === undefined ? '' : String(rawId);
           const cardKey = rowId || `${index}`;
           const heading = displayValue(row.displayName ?? row.DisplayName ?? row.name ?? row.Name ?? `${title} ${index + 1}`);
