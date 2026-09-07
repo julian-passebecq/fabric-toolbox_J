@@ -1,5 +1,20 @@
 # Studio changelog
 
+## 0.7.0
+
+- Added first-class item context on top of the existing tenant/workspace context model.
+- Added a workspace-scoped Item Explorer: select one item and automatically reuse `workspaceId` + `itemId` across item detail, item connections, job instances and schedules.
+- Automatically clear selected item context when workspace context changes so item IDs cannot leak across workspaces.
+- Added tenant + workspace scoped recent-item memory in browser-local storage, with migration of the previous workspace-only recent-selection cache. No credentials, tokens or approval state are persisted.
+- Generalized the inventory component to accept registered capability parameters, validate required context before execution and normalize common Fabric REST list payload shapes.
+- Added explicit inherited-context badges on operation pages and badges for mandatory parameters still requiring operator input.
+- Added item context to the global connection strip and Overview state summary.
+- Added direct navigation from selected item context into Runs & Schedules.
+- Lazy-loaded secondary pages so adding operator modules no longer inflates the initial application bundle.
+- Split React and Fluent dependencies into stable vendor chunks. The application entry chunk dropped from roughly 504 kB in v0.6 to roughly 50 kB in the first v0.7 production build.
+- Kept the guarded-write allowlist unchanged. Item, job, schedule, Git and destructive writes remain blocked.
+- Refreshed README and roadmap documentation so they describe the actual guarded-write safety model and current navigation rather than the older read-only state.
+
 ## 0.6.0
 
 - Added filtering, click-to-sort columns and CSV export to the reusable result viewer while retaining raw JSON, copy and JSON download.
