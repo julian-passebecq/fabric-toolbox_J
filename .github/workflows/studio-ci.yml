@@ -2,13 +2,23 @@ name: Fabric Ops Studio CI
 
 on:
   push:
-    branches: [fabric-ops-studio-v1]
+    branches: [fabric-ops-studio-v1, 'codex/**']
     paths:
       - 'studio/**'
+      - 'tools/MicrosoftFabricMgmt/**'
+      - 'tools/MicrosoftFabricMgmtMCPServer/**'
+      - 'tools/fabric-security-audit/**'
+      - 'tools/fabric-assessment-tool/**'
+      - 'tools/Lineage_Extractor/**'
       - '.github/workflows/studio-ci.yml'
   pull_request:
     paths:
       - 'studio/**'
+      - 'tools/MicrosoftFabricMgmt/**'
+      - 'tools/MicrosoftFabricMgmtMCPServer/**'
+      - 'tools/fabric-security-audit/**'
+      - 'tools/fabric-assessment-tool/**'
+      - 'tools/Lineage_Extractor/**'
       - '.github/workflows/studio-ci.yml'
 
 concurrency:
@@ -16,50 +26,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  backend:
-    runs-on: ubuntu-latest
+  integrated:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-      - name: Install backend
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e studio/backend pytest
-      - name: Compile backend
-        run: python -m compileall studio/backend/app
-      - name: Test capability discovery
-        working-directory: studio/backend
-        run: pytest -q
-
-  frontend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+          python-version: '3.13'
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-      - name: Install frontend dependencies
+          node-version: '22.22.0'
+          cache: npm
+          cache-dependency-path: studio/package-lock.json
+      - name: Install locked backend
+        run: |
+          python -m pip install -r studio/backend/requirements.lock
+          python -m pip install --no-deps --no-build-isolation -e studio/backend
+      - name: Compile and test backend, provider subprocesses, API, and launcher
+        run: |
+          python -m compileall -q studio/backend/app studio/scripts
+          python -m pytest -q studio/backend/tests
+      - name: Install locked frontend
         working-directory: studio
-        run: npm install
-      - name: Build frontend
+        run: npm ci
+      - name: Component tests and build
         working-directory: studio
-        run: npm run build
-
-  launcher:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Parse Windows launcher
+        run: |
+          npm run test -w frontend -- --run
+          npm run build
+      - name: Install browser
+        working-directory: studio/frontend
+        run: npx playwright install --with-deps chromium
+      - name: Real local proxy and browser smoke
+        working-directory: studio
+        env:
+          STUDIO_TEST_PYTHON: python
+        run: npm run test:e2e -w frontend
+      - name: Windows launcher install, readiness, and cleanup
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $tokens = $null
-          $errors = $null
-          $path = (Resolve-Path 'studio/scripts/start-studio.ps1').Path
-          [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
-          if ($errors.Count -gt 0) {
-            $errors | ForEach-Object { Write-Error $_.Message }
-            exit 1
-          }
-          Write-Host "Launcher syntax OK: $path"
+          ./studio/scripts/start-studio.ps1 -NoBrowser -SmokeTest -PythonPath python
+          ./studio/scripts/start-studio.ps1 -NoBrowser -SkipInstall -SmokeTest -PythonPath python

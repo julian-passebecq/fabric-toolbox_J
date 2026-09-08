@@ -25,8 +25,8 @@ import {
   Timeline24Regular,
   Wrench24Regular,
 } from '@fluentui/react-icons';
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import { Capability, connectFabric, getCapabilities, getSession } from './api/client';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Capability, connectFabric, getCapabilities, getSession, setSessionGeneration } from './api/client';
 import { CommandWorkbench } from './components/CommandWorkbench';
 import staticCapabilities from './data/capabilities.json';
 import { InventoryPage } from './pages/InventoryPage';
@@ -87,7 +87,7 @@ function riskAppearance(risk: Capability['risk']) {
 
 function isReadExecutable(capability: Capability) {
   return capability.risk === 'read'
-    && capability.execution_policy !== 'blocked'
+    && capability.execution_policy === 'read'
     && (capability.provider === 'MicrosoftFabricMgmt' || capability.provider === 'Fabric REST API');
 }
 
@@ -109,11 +109,13 @@ export function App() {
   const styles = useStyles();
   const [section, setSection] = useState('Overview');
   const [query, setQuery] = useState('');
-  const [catalog, setCatalog] = useState<Capability[]>(staticCapabilities as Capability[]);
+  const [catalog, setCatalog] = useState<Capability[]>((staticCapabilities as Capability[]).map(c => ({ ...c, execution_policy: 'blocked' })));
   const [catalogState, setCatalogState] = useState<'loading' | 'live' | 'fallback'>('loading');
   const [selected, setSelected] = useState<Capability | null>(null);
   const [tenantId, setTenantId] = useState('');
   const [connected, setConnected] = useState(false);
+  const [generation, setGeneration] = useState('');
+  const connectionAttempt = useRef(0);
   const [connecting, setConnecting] = useState(false);
   const [connectionText, setConnectionText] = useState('Not connected');
   const [workspaceContext, setWorkspaceContext] = useState<WorkspaceContext | null>(null);
@@ -135,21 +137,27 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (connecting) return;
     let cancelled = false;
-    getSession()
-      .then((session) => {
-        if (cancelled) return;
-        setConnected(session.connected);
-        if (session.tenant_id) setTenantId(session.tenant_id);
-        setConnectionText(session.connected
-          ? `Connected to tenant ${session.tenant_id ?? 'current session'}`
-          : 'Not connected');
-      })
-      .catch(() => {
-        if (!cancelled) setConnectionText('Backend session unavailable');
+    const attempt = connectionAttempt.current;
+    const refresh = () => getSession().then(session => {
+      if (cancelled || attempt !== connectionAttempt.current) return;
+      setConnected(session.connected);
+      setGeneration(current => {
+        if (current !== session.generation) {
+          setWorkspaceContext(null); setItemContext(null); setSelected(null);
+        }
+        return session.generation;
       });
-    return () => { cancelled = true; };
-  }, []);
+      setSessionGeneration(session.generation);
+      setConnectionText(session.connected ? `Connected to tenant ${session.tenant_id}` : 'Not connected');
+    }).catch(() => {
+      if (!cancelled) { setConnected(false); setGeneration(''); setSessionGeneration(''); setConnectionText('Backend session unavailable'); }
+    });
+    void refresh();
+    const timer = setInterval(() => void refresh(), 3000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [connecting]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -199,16 +207,22 @@ export function App() {
 
   async function handleConnect() {
     if (!tenantId.trim()) return;
+    const tenant = tenantId.trim();
+    const attempt = ++connectionAttempt.current;
+    setGeneration(''); setSessionGeneration(''); setSelected(null);
     setConnecting(true);
     setConnected(false);
     setWorkspaceContext(null);
     setItemContext(null);
     setConnectionText('Opening Fabric authentication...');
     try {
-      const result = await connectFabric(tenantId.trim());
+      const result = await connectFabric(tenant);
+      if (attempt !== connectionAttempt.current) return;
       if (result.success === false) throw new Error(String(result.error ?? 'Authentication failed'));
       setConnected(true);
-      setConnectionText(`Connected to tenant ${tenantId.trim()}`);
+      setGeneration(String(result.generation ?? ''));
+      setSessionGeneration(String(result.generation ?? ''));
+      setConnectionText(`Connected to tenant ${String(result.tenant_id ?? tenant)}`);
     } catch (err) {
       setConnectionText(err instanceof Error ? err.message : String(err));
     } finally {
@@ -318,7 +332,7 @@ export function App() {
           <div className={styles.sectionSpacer}>
             <OperationsPage
               title="Guarded workspace changes"
-              description="Only create workspace and update workspace metadata are enabled. Both use upstream SupportsShouldProcess/-WhatIf plus Studio's tenant-bound, expiring, typed-approval mutation broker."
+              description="Workspace create/update are candidate operations, currently blocked pending review of upstream retry and HTTP 204 behavior."
               capabilities={workspaceWriteCapabilities}
               connected={connected}
               defaultParameters={workspaceDefaults}
@@ -390,10 +404,10 @@ export function App() {
 
       <div className={styles.connectionBar}>
         <Text weight="semibold">Tenant</Text>
-        <Input className={styles.tenantInput} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" value={tenantId} onChange={(_, data) => setTenantId(data.value)} />
+        <Input aria-label="Tenant" className={styles.tenantInput} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" value={tenantId} onChange={(_, data) => setTenantId(data.value)} />
         <Button appearance="primary" disabled={connecting || !tenantId.trim()} onClick={handleConnect}>{connecting ? 'Connecting…' : 'Connect'}</Button>
         <Badge appearance={connected ? 'tint' : 'outline'}>{connected ? 'CONNECTED' : 'OFFLINE'}</Badge>
-        <Text size={200} className={styles.connectionText}>{connectionText}</Text>
+        <Text role="status" size={200} className={styles.connectionText}>{connectionText}</Text>
         {workspaceContext && <Badge appearance="tint">Workspace: {workspaceContext.name}</Badge>}
         {itemContext && <Badge appearance="tint">Item: {itemContext.name}</Badge>}
         {itemContext && <Button size="small" appearance="subtle" onClick={() => setItemContext(null)}>Clear item</Button>}
@@ -408,7 +422,7 @@ export function App() {
             </Button>
           ))}
         </nav>
-        <main className={styles.main}>
+        <main key={`${generation}:${workspaceContext?.id ?? ''}:${itemContext?.id ?? ''}`} className={styles.main}>
           <Suspense fallback={<Spinner label="Loading Studio module" />}>
             {renderSection()}
           </Suspense>

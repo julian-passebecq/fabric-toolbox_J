@@ -66,3 +66,12 @@ Read-only operations can be enabled first.
 ## Rule 7: no analytical authoring creep
 
 Do not add DAX optimization, semantic-model editing, measure editing or report-canvas authoring. Keep report/model items only where they matter operationally: inventory, lineage, permissions, Git, deployment, monitoring and lifecycle management.
+
+## S01 execution admission
+
+Do not regenerate `backend/app/admission.json` or `provider_sources.json` merely
+to make changed upstream sources pass. Inspect source/contract changes and obtain
+the required execution review. Source hashes normalize Git line endings. The
+Studio extension retains upstream domain functions and command framing while
+using bounded stdin command-mode startup and owned-process cleanup. Guarded
+writes remain suspended pending the upstream retry/204 lead decision.

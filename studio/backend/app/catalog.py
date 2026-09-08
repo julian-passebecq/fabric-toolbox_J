@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .models import Capability, ParameterSpec
+from .admission import apply_admission
 
 
 STUDIO_DIR = Path(__file__).resolve().parents[2]
@@ -129,15 +130,20 @@ def discover_powershell_capabilities() -> list[Capability]:
                     parameter_specs=specs,
                 )
             )
-    return found
+    return [apply_admission(item) for item in found]
 
 
 def combined_catalog() -> list[Capability]:
-    merged: dict[str, Capability] = {item.id: item for item in discover_powershell_capabilities()}
+    discovered = discover_powershell_capabilities()
+    entries = load_static_entries()
+    for ids in ([c.id for c in discovered], [e.get('id') for e in entries]):
+        if len(ids) != len(set(ids)):
+            raise ValueError('Duplicate raw capability IDs before overlay')
+    merged: dict[str, Capability] = {item.id: item for item in discovered}
 
     # Curated metadata overlays generated metadata instead of replacing it, so
     # source-derived parameters and paths continue to track upstream changes.
-    for entry in load_static_entries():
+    for entry in entries:
         entry_id = entry.get("id")
         if not entry_id:
             continue
@@ -147,4 +153,9 @@ def combined_catalog() -> list[Capability]:
         data["generated"] = False
         merged[entry_id] = Capability.model_validate(data)
 
+    for item in merged.values():
+        if item.command == 'New-FabricWorkspace':
+            item.parameters = [n for n in item.parameters if n != 'CapacityId']
+            item.parameter_specs = [s for s in item.parameter_specs if s.name != 'CapacityId']
+        apply_admission(item)
     return sorted(merged.values(), key=lambda item: (item.category.lower(), item.title.lower()))

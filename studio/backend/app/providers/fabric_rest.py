@@ -5,7 +5,10 @@ from typing import Any
 from urllib.parse import urlencode, quote
 
 from ..models import Capability
+from ..contracts import parse_endpoint, validate_parameters
+from ..admission import require_admission
 from .microsoftfabricmgmt import UnsafeOperation, _ps_literal, runtime
+from .outcomes import wrap_invocation
 
 
 FABRIC_BASE_URL = "https://api.fabric.microsoft.com"
@@ -20,6 +23,7 @@ def _normalise_query_value(value: Any) -> str:
 
 
 def build_rest_get_command(capability: Capability, parameters: dict[str, Any] | None = None) -> str:
+    require_admission(capability, 'read')
     if capability.provider != "Fabric REST API":
         raise UnsafeOperation("Capability is not provided by the Fabric REST API")
     if capability.risk != "read":
@@ -27,19 +31,14 @@ def build_rest_get_command(capability: Capability, parameters: dict[str, Any] | 
     if not capability.endpoint:
         raise UnsafeOperation("REST capability has no registered endpoint")
 
-    endpoint_match = _ENDPOINT_RE.fullmatch(capability.endpoint.strip())
-    if not endpoint_match:
-        raise UnsafeOperation("REST endpoint declaration is invalid")
-
-    method = endpoint_match.group("method")
+    method, path, placeholders = parse_endpoint(capability)
     if method != "GET":
         raise UnsafeOperation(f"Only GET is enabled for REST capabilities; method={method}")
 
     if capability.response_mode not in {"sync", "fabric-lro"}:
         raise UnsafeOperation(f"Unsupported REST response mode: {capability.response_mode}")
 
-    path = endpoint_match.group("path")
-    provided = parameters or {}
+    provided = validate_parameters(capability, parameters)
     allowed = {spec.name for spec in capability.parameter_specs} or set(capability.parameters)
     unknown = sorted(set(provided) - allowed)
     if unknown:
@@ -70,12 +69,16 @@ def build_rest_get_command(capability: Capability, parameters: dict[str, Any] | 
     url_literal = _ps_literal(url)
     lro_switch = " -WaitForCompletion" if capability.response_mode == "fabric-lro" else ""
     command = (
-        f"$headers = Get-FabricAPIHeaders; "
-        f"$result = Invoke-FabricAPIRequest -BaseURI {url_literal} -Headers $headers -Method 'Get'{lro_switch}; "
-        "$result | ConvertTo-Json -Depth 20 -Compress"
+        "& (Get-Module MicrosoftFabricMgmt) { Invoke-FabricAuthCheck -ThrowOnFailure; "
+        f"Invoke-FabricAPIRequest -BaseURI {url_literal} -Headers $script:FabricAuthContext.FabricHeaders -Method 'Get'{lro_switch} "
+        "}"
     )
-    return command
+    return wrap_invocation(command)
 
 
-def execute_rest_read(capability: Capability, parameters: dict[str, Any] | None = None) -> dict[str, Any]:
-    return runtime.run_json(build_rest_get_command(capability, parameters))
+def execute_rest_read(capability: Capability, parameters: dict[str, Any] | None = None, *, expected=None) -> dict[str, Any]:
+    expected = expected or runtime.status()
+    with runtime.dispatch(expected):
+        command = build_rest_get_command(capability, parameters)
+        runtime._check_loaded_artifact()
+        return runtime.run_json(command)

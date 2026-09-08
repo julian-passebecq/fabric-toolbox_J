@@ -1,7 +1,7 @@
 export type Risk = 'read' | 'write' | 'admin' | 'destructive';
 export type ResponseMode = 'sync' | 'fabric-lro';
 export type ExecutionPolicy = 'read' | 'guarded-write' | 'blocked';
-export type MutationStatus = 'planned' | 'validated' | 'executing' | 'executed' | 'failed' | 'expired';
+export type MutationStatus = 'planned' | 'validated' | 'executing' | 'executed' | 'failed' | 'expired' | 'validating' | 'validation_failed' | 'invalidated' | 'applied_unverified' | 'outcome_unknown';
 
 export type ParameterSpec = {
   name: string;
@@ -21,6 +21,7 @@ export type Capability = {
   risk: Risk;
   response_mode?: ResponseMode;
   execution_policy?: ExecutionPolicy;
+  blocked_reason?: string;
   supports_whatif?: boolean;
   verification_capability_id?: string;
   verification_parameter_map?: Record<string, string>;
@@ -69,6 +70,8 @@ export type MutationPlan = {
   created_at: string;
   expires_at: string;
   status: MutationStatus;
+  session_generation: string;
+  audit_warning?: string;
 };
 
 export type MutationValidationResponse = {
@@ -87,6 +90,7 @@ export type SessionStatus = {
   transport: string;
   feature_provider: string;
   connected: boolean;
+  generation: string;
   tenant_id?: string;
 };
 
@@ -170,9 +174,12 @@ export type Diagnostics = {
 
 export type ActivityRecord = Record<string, unknown> & { timestamp?: string; action?: string };
 
+let sessionGeneration = '';
+export function setSessionGeneration(value: string) { sessionGeneration = value; }
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+    headers: { 'Content-Type': 'application/json', 'X-Studio-Session': sessionGeneration, ...(init?.headers ?? {}) },
     ...init,
   });
   if (!response.ok) {
@@ -203,8 +210,9 @@ export function connectFabric(tenantId: string) {
   });
 }
 
-export function executeCapability(capabilityId: string, parameters: Record<string, unknown> = {}) {
+export function executeCapability(capabilityId: string, parameters: Record<string, unknown> = {}, signal?: AbortSignal) {
   return request<ExecutionResponse>(`/api/capabilities/${encodeURIComponent(capabilityId)}/execute`, {
+    signal,
     method: 'POST',
     body: JSON.stringify({ parameters }),
   });

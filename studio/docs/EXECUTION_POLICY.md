@@ -1,33 +1,18 @@
-# Execution policy
+# Execution policy — S01 candidate
 
-Fabric Ops Studio begins in inspect-only mode. Execution is enabled incrementally by provider and risk level.
+The current contract is in [Studio README](../README.md) and the approved
+[S01 decisions](../../projectmanagement/DECISIONS.md).
 
-## Risk levels
+Discovery never authorizes execution. Only reviewed source/contract manifests
+admit reads. Guarded writes are suspended pending the lead decision on upstream
+retries and HTTP 204 handling; no runtime flag lifts the suspension.
 
-- `read`: no state mutation
-- `write`: creates or updates Fabric state
-- `admin`: requires elevated tenant/workspace permissions or changes access/governance state
-- `destructive`: deletes, disconnects, removes assignments, or otherwise risks irreversible loss
+Candidate lifecycle: planned -> validating -> validated -> executing -> executed,
+applied_unverified, failed, or outcome_unknown. Validation failure, expiry and
+identity invalidation are terminal. Only the owning attempt may complete an
+in-flight state. Expiry cannot relabel an already-dispatched apply. Reads and
+claims check expected session at dispatch. No broker lock spans provider I/O.
 
-## Enablement order
-
-1. read-only MicrosoftFabricMgmt commands
-2. read-only official REST operations
-3. guarded write MicrosoftFabricMgmt commands
-4. guarded official REST writes
-5. specialized upstream tools
-6. destructive operations last
-
-## Required controls
-
-Every executable action must capture:
-
-- provider
-- source path or endpoint
-- resolved parameters with secrets redacted
-- risk level
-- start/end timestamps
-- result status
-- error details
-
-Write/admin/destructive actions must show a preview before execution. Destructive actions require an explicit second confirmation.
+Audit records action, opaque IDs, honest outcome and duration. It omits free-form
+parameters, rendered commands and arbitrary error/result data. Live results may
+contain provider data; exported activity remains sanitized.

@@ -1,4 +1,9 @@
-# Fabric Ops Studio roadmap
+# Fabric Ops Studio implementation history
+
+These historical checkboxes are not acceptance evidence. The active scope is
+[projectmanagement/STATUS.md](../../projectmanagement/STATUS.md). S01 reliability
+work comes before any future sprint. Workspace writes are currently suspended;
+deployment-pipeline/Get Git-connection reads remain unreviewed and blocked.
 
 ## Milestone 1 - inspect foundation
 
@@ -102,7 +107,7 @@ Specialized tools keep their own authentication, dependency and output lifecycle
 - [x] lazy-loaded secondary UI modules and stable React/Fluent vendor chunking
 - [ ] optional update check against upstream Fabric Toolbox and Fabric REST specifications
 
-## Next high-value pass
+## Future proposals — require sprint approval
 
 - guarded Security Audit launcher plus report-bundle browser, preserving the upstream script and its permission boundary
 - guarded Assessment launcher plus output browser, preserving `fat assess` as the execution source

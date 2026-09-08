@@ -1,0 +1,62 @@
+{
+  "ps-capacity-get-fabriccapacity": {
+    "fingerprint": "72736fa1a0db211fac3b35bb79cd2809d51c8ba182c7eae47fa451e14a04d6da",
+    "policy": "read",
+    "rationale": "S01 reviewed workspace/inventory GET or registered Items/Job Scheduler/Git GET; workspace writes limited to name/description."
+  },
+  "ps-connections-get-fabricconnection": {
+    "fingerprint": "18c6d84ff3098b6003c7682e7d0b1ca0375ad30d99b131364cb9ac9eab779bc4",
+    "policy": "read",
+    "rationale": "S01 reviewed workspace/inventory GET or registered Items/Job Scheduler/Git GET; workspace writes limited to name/description."
+  },
+  "rest-git-status": {
+    "fingerprint": "b2ace73c7637ab2c7f7a9b5834885ceeb282d8cae6f572d00c6e5f10307f0082",
+    "policy": "read",
+    "rationale": "S01 reviewed workspace/inventory GET or registered Items/Job Scheduler/Git GET; workspace writes limited to name/description."
+  },
+  "rest-item-get": {
+    "fingerprint": "fe826aed8be02fd9c7e09f74df2aded74d8eda914d28de5bceeb6f9a89634175",
+    "policy": "read",
+    "rationale": "S01 reviewed workspace/inventory GET or registered Items/Job Scheduler/Git GET; workspace writes limited to name/description."
+  },
+  "rest-item-connections-list": {
+    "fingerprint": "6d6468b9663b648e87ddc130be1dbc1d6ab47ba70eef8235a60630c31f286549",
+    "policy": "read",
+    "rationale": "S01 reviewed workspace/inventory GET or registered Items/Job Scheduler/Git GET; workspace writes limited to name/description."
+  },
+  "rest-items-list": {
+    "fingerprint": "26ba568340598817b4ff79ad6bb52b6101792b162c684242e2ec7998ac2c180c",
+    "policy": "read",
+    "rationale": "S01 reviewed workspace/inventory GET or registered Items/Job Scheduler/Git GET; workspace writes limited to name/description."
+  },
+  "rest-job-instances-list": {
+    "fingerprint": "864f10bb6419bef63846e73d394d31429f1dcc86372e4c384a24f5ccc3aa2382",
+    "policy": "read",
+    "rationale": "S01 reviewed workspace/inventory GET or registered Items/Job Scheduler/Git GET; workspace writes limited to name/description."
+  },
+  "rest-schedules-list": {
+    "fingerprint": "9e54999582d12349a61e68bb4aed112541dda5dfa7327c419028361d8f519534",
+    "policy": "read",
+    "rationale": "S01 reviewed workspace/inventory GET or registered Items/Job Scheduler/Git GET; workspace writes limited to name/description."
+  },
+  "ps-workspace-new-fabricworkspace": {
+    "fingerprint": "068ba260a3ffc6d48e515766d21efb99a516ec0eb82ea6f442b3651b2fab02b6",
+    "policy": "guarded-write",
+    "rationale": "S01 reviewed workspace/inventory GET or registered Items/Job Scheduler/Git GET; workspace writes limited to name/description."
+  },
+  "ps-workspace-get-fabricworkspaceroleassignment": {
+    "fingerprint": "a905243fdd39c65a9de3af7a682a725b20c36a5f190135dd129a25caa9e14ed2",
+    "policy": "read",
+    "rationale": "S01 reviewed workspace/inventory GET or registered Items/Job Scheduler/Git GET; workspace writes limited to name/description."
+  },
+  "ps-workspace-get-fabricworkspace": {
+    "fingerprint": "af8fecca8e21a25b44ecf3cd6810c38cf6e69160aafdb6d8b4b81326f7ad11a4",
+    "policy": "read",
+    "rationale": "S01 reviewed workspace/inventory GET or registered Items/Job Scheduler/Git GET; workspace writes limited to name/description."
+  },
+  "ps-workspace-update-fabricworkspace": {
+    "fingerprint": "44feb411cade72e0acfc586f1d3b1ef8620ca6bc368ef4fbb56d9723ae4bc5db",
+    "policy": "guarded-write",
+    "rationale": "S01 reviewed workspace/inventory GET or registered Items/Job Scheduler/Git GET; workspace writes limited to name/description."
+  }
+}

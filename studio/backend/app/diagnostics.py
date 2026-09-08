@@ -7,6 +7,7 @@ from collections import Counter
 from pathlib import Path
 
 from .catalog import combined_catalog
+from .contracts import parse_endpoint
 from .providers.microsoftfabricmgmt import REPO_ROOT, UPSTREAM_SESSION_PATH, runtime
 
 
@@ -29,6 +30,8 @@ def _compatibility_report(catalog: list) -> dict:
     local_sources_missing = 0
 
     for item in catalog:
+        if item.provider not in {'MicrosoftFabricMgmt', 'Fabric REST API', 'Fabric Security Audit'}:
+            issues.append({'severity':'error','capability_id':item.id,'message':'Unknown provider reference.'})
         if item.verification_capability_id and item.verification_capability_id not in catalog_ids:
             issues.append({
                 "severity": "error",
@@ -50,8 +53,12 @@ def _compatibility_report(catalog: list) -> dict:
                     "message": "Guarded write does not advertise upstream -WhatIf support.",
                 })
 
-        if item.provider == "Fabric REST API" and item.execution_policy == "read":
-            if not item.endpoint or not item.endpoint.startswith("/v1/"):
+        if item.provider == "Fabric REST API" and item.risk == "read":
+            try:
+                method, _, _ = parse_endpoint(item)
+                if method != 'GET':
+                    raise ValueError('Read endpoint must use GET')
+            except ValueError:
                 issues.append({
                     "severity": "error",
                     "capability_id": item.id,

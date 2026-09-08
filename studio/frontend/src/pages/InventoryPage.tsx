@@ -11,6 +11,7 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import { useEffect, useMemo, useState } from 'react';
+import { useRequestScope } from '../api/scope';
 import { Capability, executeCapability, getSession } from '../api/client';
 
 const RECENT_SELECTIONS_KEY = 'fabric-ops-studio.recent-inventory-selections.v2';
@@ -52,7 +53,7 @@ type InventoryPageProps = {
 };
 
 function normaliseRows(result: Record<string, unknown>): Record<string, unknown>[] {
-  const payload = result.output ?? result;
+  const payload = result.studio_envelope === 1 ? result.data : result.output ?? result;
   if (Array.isArray(payload)) return payload.filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null);
   if (payload && typeof payload === 'object') {
     const object = payload as Record<string, unknown>;
@@ -149,6 +150,7 @@ export function InventoryPage({
   const [tenantId, setTenantId] = useState('');
   const [recentSelections, setRecentSelections] = useState<RecentSelection[]>(() => readRecentSelections());
   const parameterSignature = JSON.stringify(parameters);
+  const scope = useRequestScope(`${capability?.id}:${parameterSignature}:${connected}`);
   const visibleFields = useMemo(() => fields && fields.length > 0 ? fields : discoverFields(rows), [fields, rows]);
   const tenantRecent = useMemo(
     () => tenantId ? recentSelections.filter((item) => item.tenantId === tenantId && item.scope === recentScope).slice(0, 6) : [],
@@ -175,20 +177,25 @@ export function InventoryPage({
     setRows([]);
     setRenderedCommand('');
     setError('');
-  }, [parameterSignature, capability?.id]);
+    setLoading(false);
+  }, [parameterSignature, capability?.id, connected]);
 
   async function load() {
     if (!capability || missingRequired.length > 0) return;
+    const active = scope.start();
     setLoading(true);
     setError('');
     try {
-      const response = await executeCapability(capability.id, parameters);
+      const response = await executeCapability(capability.id, parameters, active.signal);
+      if (!active.current()) return;
       setRenderedCommand(response.rendered_command);
       setRows(normaliseRows(response.result));
     } catch (err) {
+      if (!active.current()) return;
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoading(false);
+      active.finish();
+      if (active.current()) setLoading(false);
     }
   }
 
@@ -254,7 +261,7 @@ export function InventoryPage({
       {!connected && <Text block className={styles.muted}>Connect to a Fabric tenant using the bar above before running inventory.</Text>}
       {connected && missingRequired.length > 0 && <Text block className={styles.muted}>Select the required context first: {missingRequired.join(', ')}.</Text>}
       {loading && <Spinner label={`Loading ${title.toLowerCase()}`} />}
-      {error && <Text block className={styles.error}>{error}</Text>}
+      {error && <Text role="alert" block className={styles.error}>{error}</Text>}
       {renderedCommand && <Text block className={styles.muted}>Executed: {renderedCommand}</Text>}
       {!loading && rows.length === 0 && connected && missingRequired.length === 0 && <Text block className={styles.muted}>No results loaded yet. Use Refresh to query the upstream provider.</Text>}
 

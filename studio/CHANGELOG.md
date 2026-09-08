@@ -1,5 +1,17 @@
 # Studio changelog
 
+## 0.8.0 — S01 reliability candidate
+
+- Reviewed execution admission and shared typed input contracts.
+- Versioned outcomes, session generation checks and bounded PowerShell lifecycle.
+- Immutable plans, atomic claims and explicit uncertain/unverified outcomes.
+- Per-launch local client boundary and bounded structured activity history.
+- Context-safe UI, component/browser fixtures, locked installs and owned cleanup.
+- Workspace writes suspended: upstream retry/204 defects require lead review.
+
+Local evidence does not imply tenant validation or sprint acceptance.
+
+
 ## 0.7.0
 
 - Added first-class item context on top of the existing tenant/workspace context model.

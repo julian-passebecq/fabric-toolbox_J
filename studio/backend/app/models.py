@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, model_validator
 Risk = Literal["read", "write", "admin", "destructive"]
 ResponseMode = Literal["sync", "fabric-lro"]
 ExecutionPolicy = Literal["read", "guarded-write", "blocked"]
-MutationStatus = Literal["planned", "validated", "executing", "executed", "failed", "expired"]
+MutationStatus = Literal["planned", "validating", "validated", "executing", "executed", "failed", "expired", "invalidated", "validation_failed", "applied_unverified", "outcome_unknown"]
 
 
 class ParameterSpec(BaseModel):
@@ -38,11 +38,13 @@ class Capability(BaseModel):
     verification_parameter_map: dict[str, str] = Field(default_factory=dict)
     parameters: list[str] = Field(default_factory=list)
     parameter_specs: list[ParameterSpec] = Field(default_factory=list)
+    blocked_reason: str | None = None
+    admission_fingerprint: str | None = None
 
     @model_validator(mode="after")
     def default_execution_policy(self):
         if self.execution_policy is None:
-            self.execution_policy = "read" if self.risk == "read" else "blocked"
+            self.execution_policy = "blocked"
         return self
 
 
@@ -98,6 +100,14 @@ class MutationPlan(BaseModel):
     created_at: str
     expires_at: str
     status: MutationStatus = "planned"
+    session_generation: str = ''
+    artifact_identity: str = ''
+    attempt_id: str | None = None
+    stage: str | None = None
+    apply_outcome: str | None = None
+    verification_outcome: str | None = None
+    reason: str | None = None
+    audit_warning: str | None = None
 
 
 class MutationValidationResult(BaseModel):
@@ -117,3 +127,4 @@ class SessionStatus(BaseModel):
     feature_provider: str = "MicrosoftFabricMgmt"
     connected: bool = False
     tenant_id: str | None = None
+    generation: str = ''

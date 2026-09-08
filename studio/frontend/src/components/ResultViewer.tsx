@@ -36,8 +36,8 @@ function objectRows(value: unknown): Record<string, unknown>[] {
   return [];
 }
 
-function extractRows(result: Record<string, unknown>): Record<string, unknown>[] {
-  const direct = result.output ?? result;
+export function extractRows(result: Record<string, unknown>): Record<string, unknown>[] {
+  const direct = result.studio_envelope === 1 ? result.data : result.output ?? result;
   if (Array.isArray(direct)) return objectRows(direct);
   if (typeof direct !== 'object' || direct === null) return [];
 
@@ -68,8 +68,9 @@ function comparable(value: unknown): string | number {
   return displayValue(value).toLocaleLowerCase();
 }
 
-function csvCell(value: unknown): string {
-  const text = value === null || value === undefined ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);
+export function csvCell(value: unknown): string {
+  let text = value === null || value === undefined ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);
+  if (/^[=+@\-\t\r]/.test(text)) text = `'${text}`;
   return `"${text.replace(/"/g, '""')}"`;
 }
 
@@ -78,7 +79,7 @@ function downloadBlob(content: string, type: string, fileName: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = fileName;
+  anchor.download = fileName.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 120);
   anchor.click();
   URL.revokeObjectURL(url);
 }

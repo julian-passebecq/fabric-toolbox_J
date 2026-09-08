@@ -2,7 +2,7 @@
 
 Fabric Ops Studio is a management and operations UI layered on top of the existing Microsoft Fabric Toolbox.
 
-## Product scope
+## Product direction (some features remain future work)
 
 The Studio is intentionally focused on tasks that are cumbersome to perform repeatedly in the Fabric portal or directly from a terminal:
 
@@ -19,7 +19,7 @@ The Studio is intentionally focused on tasks that are cumbersome to perform repe
 - lineage and impact inspection
 - monitoring entry points and operational summaries
 - a searchable PowerShell recipe/script catalog
-- safe execution of registered PowerShell and Fabric REST operations
+- explicitly reviewed execution of selected PowerShell and Fabric REST reads
 
 ## Explicitly out of scope
 
@@ -37,34 +37,43 @@ The following are deliberately excluded from the Studio product surface:
 
 Reports and semantic models may still appear in inventory, lineage, permissions, Git, deployment and operational views because they are Fabric items. The Studio does not edit their analytical content.
 
-## Current safety model
+## Current execution boundary (S01 candidate)
 
-Studio uses an explicit three-state execution policy:
+S01 is awaiting a tech-lead decision, not accepted or tenant-validated.
+Workspace create/update are **blocked**: the upstream API helper retries uncertain
+POST/PATCH responses and rejects HTTP 204. See the developer handoff under
+`projectmanagement/reports/S01-development-handoff.md` for the reproduced defect
+and proposed upstream repair. No other writes are enabled.
 
-- `read`: registered read-only operations may execute after Fabric authentication.
-- `guarded-write`: only individually reviewed writes may be planned, validated, confirmed and executed.
-- `blocked`: all other write/admin/destructive capabilities remain non-executable even if discovered in the catalog.
+The reviewed read subset is workspace, workspace roles, capacity and connection
+inventory, plus six registered REST GETs for items, item details/connections,
+runs, schedules and Git status. All other discoveries remain visible but blocked.
+Backend `admission.json` binds the reviewed source and parameter contract; source
+or contract drift cannot silently gain permission. Loaded function ASTs and module
+file identity are checked against repository sources before dispatch.
 
-Additional controls:
+Candidate broker behavior is tested with harmless fixtures: immutable detached
+plans bind tenant, session generation, loaded artifact, parameters, exact commands,
+verification contract and ten-minute expiry. Validation/apply claims are atomic.
+An apply is single-use. WhatIf is a local simulation, not remote permission proof.
+Create verification requires the returned unique ID; update verification compares
+requested fields at the requested ID. Outcomes distinguish `executed`,
+`applied_unverified`, `failed` and `outcome_unknown`. Inspect remote state after an
+unknown outcome; do not replay a write. Production write admission has no runtime
+or environment override. Only test fixtures lift the suspension without real I/O.
 
-- `MicrosoftFabricMgmt` public commands are discovered automatically from `tools/MicrosoftFabricMgmt/source/Public`.
-- Official Fabric REST operations must be registered explicitly with their endpoint and parameter schema; there is no arbitrary URL box.
-- Fabric APIs that return `202 Accepted` declare `response_mode: fabric-lro` and delegate waiting/result retrieval to upstream `Invoke-FabricAPIRequest -WaitForCompletion`.
-- Guarded writes are tenant-bound, expire after ten minutes, are single use and are cryptographically bound to the capability, tenant, parameters and rendered command.
-- When the upstream cmdlet exposes `SupportsShouldProcess`, Studio requires `-WhatIf` validation before apply.
-- Guarded writes require exact typed confirmation and use read-back verification where a verification capability is registered.
-- Live mutation plans and approval text remain memory-only. Durable history is reconstructed from the redacted activity log rather than restoring reusable approvals after restart.
-- Sensitive fields are redacted from local activity records.
-- Specialized tools keep separate execution boundaries when they require additional authentication, permissions, dependencies or output lifecycles.
+The launcher creates a fresh server-side client credential. Backend and Vite both
+check Host/Origin; Vite replaces any client-supplied credential. The credential is
+never placed in a URL, browser storage or bundle. Both services bind to loopback.
+A manually started backend without its credential rejects protected routes. One
+backend worker is supported; the boundary is not isolation from the same OS user.
 
-### Currently allowlisted writes
-
-Only these writes are executable through the guarded-write broker:
-
-- create workspace via upstream `New-FabricWorkspace`
-- update workspace name/description via upstream `Update-FabricWorkspace`
-
-Role changes, capacity assignment, item lifecycle writes, job cancellation/retry, schedule writes, Git writes and destructive operations remain blocked until their semantics, validation path, verification strategy and blast radius have been reviewed.
+History stores structured action/status/UUID/timing summaries, not parameter
+values, commands or provider text. It uses 4 KiB records, 10 MiB files, five rotated
+files, a 1 MiB read budget and at most 1,000 returned records. Legacy records are
+sanitized on read. A start without an outcome from an earlier process is unknown.
+Mutation start-log failure blocks dispatch; outcome-log failure retains the
+terminal result and adds a warning. History never recreates approvals.
 
 ## Primary execution hierarchy
 
@@ -101,7 +110,7 @@ A feature record should make it possible to answer:
 5. Open **Items**. The selected workspace ID is injected automatically; select **Use item** once to establish item context.
 6. Item details, connections, runs and schedules inherit `workspaceId` and `itemId`. Changing workspace invalidates the selected item so an item ID cannot leak across workspace context.
 7. Operation pages show inherited parameters explicitly and identify mandatory parameters that still need operator input, such as `jobType`.
-8. Preview generated PowerShell/REST execution when desired. Read operations can execute directly; allowlisted writes use Change Plans and the guarded-write broker.
+8. Preview generated PowerShell/REST execution when desired. Reviewed read operations can execute directly; workspace writes are currently blocked pending the lead decision.
 9. Inspect results as a sortable/filterable table or raw JSON. Export JSON or CSV as appropriate.
 10. Use **Change Plans**, **Activity Log**, **Sources** and **Diagnostics** to inspect approvals, execution history, provenance and runtime/compatibility health.
 
@@ -110,8 +119,8 @@ A feature record should make it possible to answer:
 Prerequisites:
 
 - PowerShell 7 (`pwsh`)
-- Python available as `python`
-- Node.js and npm
+- Python 3.13 available as `python` (or pass `-PythonPath` explicitly)
+- Node 22.12 or newer in major 22, and npm 10 or 11 (tested with Node 22.22.0)
 
 From the repository root:
 
@@ -125,11 +134,46 @@ Useful flags:
 # Do not open the browser automatically
 .\studio\scripts\start-studio.ps1 -NoBrowser
 
-# Skip Python/npm installation when dependencies are already present
+# Skip installation only after the launcher has verified current locked dependencies
 .\studio\scripts\start-studio.ps1 -SkipInstall
 ```
 
-The launcher starts the API and UI in separate PowerShell 7 windows, then opens `http://127.0.0.1:5173` unless `-NoBrowser` is used.
+Keep the launcher running. It starts hidden owned children, waits for both API
+and authenticated proxy readiness, and opens `http://127.0.0.1:5173` unless
+`-NoBrowser` is used. Ctrl+C or startup failure stops only its children. `-SmokeTest`
+checks startup and then stops both children; `-CheckOnly` validates installation.
+`-ApiPort` and `-UiPort` choose alternative loopback ports. Logs are in `studio/.run`.
+
+The supported installation is repository-based and editable. Provider subpackages
+and JSON manifests are packaged, but standalone wheels are not a supported runtime:
+source discovery and upstream providers require the Toolbox checkout. `vite preview`
+and opening `dist/index.html` are not supported authenticated launch topologies.
+
+For repeatable developer checks, from repository root:
+
+```powershell
+python -m venv studio/backend/.venv
+& ./studio/backend/.venv/Scripts/python.exe -m pip install -r studio/backend/requirements.lock
+& ./studio/backend/.venv/Scripts/python.exe -m pip install --no-deps --no-build-isolation -e studio/backend
+& ./studio/backend/.venv/Scripts/python.exe -m pytest -q studio/backend/tests
+& ./studio/backend/.venv/Scripts/python.exe -m compileall -q studio/backend/app studio/scripts
+Set-Location studio
+npm ci
+npm run test -w frontend -- --run
+npm run build
+npx -w frontend playwright install chromium
+npm run test:e2e -w frontend
+```
+
+The browser fixture uses harmless provider responses behind the actual local
+boundary, including the candidate broker. No tenant account is needed. It is a
+separate test script, never a production environment bypass. CI runs these lanes
+on Linux and Windows; remote CI evidence is separate from local checks.
+
+CSV exports quote fields and prefix formula-leading cells (`=`, `+`, `-`, `@`, tab,
+carriage return) with an apostrophe. CSV reflects visible rows/columns; JSON retains
+the original displayed result including its invocation envelope. Filenames are
+restricted to letters, numbers, periods, underscores and hyphens.
 
 ## Current top-level navigation
 
@@ -185,4 +229,4 @@ The frontend lazy-loads secondary pages and separates React/Fluent dependencies 
 
 Studio development lives independently under `studio/` and should avoid modifying upstream tool directories unless an upstream fix is intentionally being prepared.
 
-Current development branch: `fabric-ops-studio-v1`.
+Integration branch: `fabric-ops-studio-v1`; S01 candidate: `codex/s01-reliability-foundation`.

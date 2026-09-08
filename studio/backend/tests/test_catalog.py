@@ -143,7 +143,8 @@ def test_builds_registered_items_rest_get_via_upstream_module():
     items = next(item for item in combined_catalog() if item.id == "rest-items-list")
     command = build_rest_get_command(items, {"workspaceId": "ws-123", "type": "Notebook"})
 
-    assert "Get-FabricAPIHeaders" in command
+    assert "Invoke-FabricAuthCheck" in command
+    assert "$script:FabricAuthContext.FabricHeaders" in command
     assert "Invoke-FabricAPIRequest" in command
     assert "-Method 'Get'" in command
     assert "-WaitForCompletion" not in command
@@ -190,7 +191,7 @@ def test_rest_requires_registered_mandatory_parameters():
 
 def test_rest_rejects_unknown_parameters():
     items = next(item for item in combined_catalog() if item.id == "rest-items-list")
-    with pytest.raises(ValueError, match="Unknown REST parameters"):
+    with pytest.raises(ValueError, match="Unknown parameters"):
         build_rest_get_command(items, {"workspaceId": "ws", "arbitraryUrl": "https://example.com"})
 
 

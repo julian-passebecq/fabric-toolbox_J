@@ -63,8 +63,9 @@ export function OperationsPage({ title, description, capabilities, connected, de
   useEffect(() => {
     const remembered = localStorage.getItem(selectionKey(title));
     const preferred = capabilities.find((capability) => capability.id === remembered) ?? capabilities[0] ?? null;
-    if (!selected || !capabilities.some((capability) => capability.id === selected.id)) {
-      setSelected(preferred);
+    const current = capabilities.find((capability) => capability.id === selected?.id);
+    if (current !== selected) {
+      setSelected(current ?? preferred);
     }
   }, [capabilities, selected, title]);
 

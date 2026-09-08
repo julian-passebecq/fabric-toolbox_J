@@ -12,6 +12,7 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import { useEffect, useMemo, useState } from 'react';
+import { MutationOutcome } from '../components/MutationOutcome';
 import { ActivityRecord, MutationPlan, getActivity, getMutationPlans } from '../api/client';
 
 const useStyles = makeStyles({
@@ -94,7 +95,7 @@ export function ChangePlansPage() {
               description={<Text>Plan {plan.plan_id.slice(0, 8).toUpperCase()}</Text>}
             />
             <div className={styles.badges}>
-              <Badge appearance={statusAppearance(plan.status)}>{plan.status.toUpperCase()}</Badge>
+              <MutationOutcome status={plan.status} /><Badge appearance={statusAppearance(plan.status)}>{plan.status.toUpperCase()}</Badge>
               <Badge appearance="outline">{plan.risk.toUpperCase()}</Badge>
               <Badge appearance="outline">Tenant-bound</Badge>
               {plan.supports_validation && <Badge appearance="tint">WHATIF</Badge>}

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 
 from .activity import append_activity, read_activity
 from .catalog import combined_catalog
@@ -27,12 +27,14 @@ from .providers.microsoftfabricmgmt import (
 )
 from .sources import load_source_registry
 from .specialized_tools import list_specialized_tools
+from .boundary import local_boundary
 
 app = FastAPI(
     title="Fabric Ops Studio API",
-    version="0.5.0",
+    version="0.8.0",
     description="Fabric operations layer with read execution and explicitly allowlisted guarded writes.",
 )
+app.middleware('http')(local_boundary)
 
 
 def _capability_or_404(capability_id: str) -> Capability:
@@ -56,13 +58,13 @@ def _build_preview_command(item: Capability, parameters: dict) -> tuple[str, str
     raise UnsafeOperation(f"Provider is not executable in this milestone: {item.provider}")
 
 
-def _execute_read(item: Capability, parameters: dict) -> dict:
+def _execute_read(item: Capability, parameters: dict, expected=None) -> dict:
     if item.risk != "read" or item.execution_policy != "read":
         raise UnsafeOperation("The direct executor accepts registered read operations only")
     if item.provider == "MicrosoftFabricMgmt":
-        return runtime.execute_read(item, parameters)
+        return runtime.execute_read(item, parameters, expected=expected)
     if item.provider == "Fabric REST API":
-        return execute_rest_read(item, parameters)
+        return execute_rest_read(item, parameters, expected=expected)
     raise UnsafeOperation(f"Provider is not executable in this milestone: {item.provider}")
 
 
@@ -80,15 +82,6 @@ def session_status() -> SessionStatus:
 def connect(request: ConnectRequest) -> dict:
     try:
         result = runtime.connect_interactive(request.tenant_id)
-        append_activity(
-            {
-                "action": "session.connect",
-                "provider": "MicrosoftFabricMgmt",
-                "transport": "upstream-powershell-session",
-                "parameters": {"tenant_id": request.tenant_id},
-                "result": result,
-            }
-        )
         return result
     except (ProviderUnavailable, RuntimeError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -145,18 +138,21 @@ def preview(capability_id: str, request: PreviewRequest | None = None) -> Execut
 
 
 @app.post("/api/capabilities/{capability_id}/execute", response_model=ExecutionResult)
-def execute(capability_id: str, request: PreviewRequest | None = None) -> ExecutionResult:
+def execute(capability_id: str, request: PreviewRequest | None = None, x_studio_session: str | None = Header(default=None)) -> ExecutionResult:
     item = _capability_or_404(capability_id)
     parameters = request.parameters if request else {}
 
-    if not runtime.status().connected:
+    expected = runtime.status()
+    if x_studio_session != expected.generation:
+        raise HTTPException(status_code=409, detail='Session generation changed; refresh the connected context')
+    if not expected.connected:
         raise HTTPException(status_code=409, detail="Connect to a Fabric tenant before executing operations")
 
     try:
         if item.risk != "read" or item.execution_policy != "read":
             raise UnsafeOperation("Writes cannot use the direct executor; create a guarded mutation plan instead")
         rendered, transport = _build_preview_command(item, parameters)
-        result = _execute_read(item, parameters)
+        result = _execute_read(item, parameters, expected)
     except (UnsafeOperation, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ProviderUnavailable as exc:
@@ -164,23 +160,6 @@ def execute(capability_id: str, request: PreviewRequest | None = None) -> Execut
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    append_activity(
-        {
-            "action": "capability.execute",
-            "capability_id": item.id,
-            "provider": item.provider,
-            "source": item.source,
-            "source_path": item.source_path,
-            "endpoint": item.endpoint,
-            "response_mode": item.response_mode,
-            "execution_policy": item.execution_policy,
-            "transport": transport,
-            "risk": item.risk,
-            "rendered_command": rendered,
-            "parameters": parameters,
-            "result": result,
-        }
-    )
 
     return ExecutionResult(
         capability_id=item.id,
@@ -192,29 +171,17 @@ def execute(capability_id: str, request: PreviewRequest | None = None) -> Execut
 
 
 @app.post("/api/capabilities/{capability_id}/mutations/plan", response_model=MutationPlan)
-def create_mutation_plan(capability_id: str, request: MutationPlanRequest | None = None) -> MutationPlan:
+def create_mutation_plan(capability_id: str, request: MutationPlanRequest | None = None, x_studio_session: str | None = Header(default=None)) -> MutationPlan:
     item = _capability_or_404(capability_id)
     parameters = request.parameters if request else {}
+    expected = runtime.status()
+    if x_studio_session != expected.generation:
+        raise HTTPException(status_code=409, detail='Session generation changed; refresh the connected context')
     try:
-        plan = broker.create_plan(item, parameters)
+        plan = broker.create_plan(item, parameters, expected=expected)
     except (UnsafeOperation, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    append_activity(
-        {
-            "action": "mutation.plan",
-            "plan_id": plan.plan_id,
-            "digest": plan.digest,
-            "capability_id": item.id,
-            "provider": item.provider,
-            "source": item.source,
-            "source_path": item.source_path,
-            "risk": item.risk,
-            "parameters": parameters,
-            "rendered_command": plan.rendered_command,
-            "expires_at": plan.expires_at,
-        }
-    )
     return plan
 
 
@@ -242,16 +209,6 @@ def validate_mutation(plan_id: str) -> MutationValidationResult:
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    append_activity(
-        {
-            "action": "mutation.validate",
-            "plan_id": response.plan.plan_id,
-            "digest": response.plan.digest,
-            "capability_id": response.plan.capability_id,
-            "status": response.plan.status,
-            "result": response.result,
-        }
-    )
     return response
 
 
@@ -266,21 +223,6 @@ def execute_mutation(plan_id: str, request: MutationApprovalRequest) -> Mutation
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    append_activity(
-        {
-            "action": "mutation.execute",
-            "plan_id": response.plan.plan_id,
-            "digest": response.plan.digest,
-            "capability_id": response.plan.capability_id,
-            "provider": response.plan.provider,
-            "risk": response.plan.risk,
-            "status": response.plan.status,
-            "rendered_command": response.plan.rendered_command,
-            "parameters": response.plan.parameters,
-            "result": response.result,
-            "verification": response.verification,
-        }
-    )
     return response
 
 

@@ -1,8 +1,12 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "fabric-ops-studio-backend"
-version = "0.1.0"
+version = "0.8.0"
 description = "Thin orchestration API for Fabric Ops Studio"
-requires-python = ">=3.10"
+requires-python = ">=3.13,<3.14"
 dependencies = [
   "fastapi>=0.116,<1",
   "uvicorn[standard]>=0.35,<1",
@@ -13,5 +17,8 @@ dependencies = [
 [project.scripts]
 fabric-ops-studio-api = "app.main:run"
 
-[tool.setuptools]
-packages = ["app"]
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.setuptools.package-data]
+app = ["*.json"]

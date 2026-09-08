@@ -37,9 +37,9 @@ def test_plan_is_tenant_bound_digest_bound_and_expiring(monkeypatch):
 def test_whatif_is_required_before_execution(monkeypatch):
     broker = MutationBroker()
     monkeypatch.setattr(runtime, "status", lambda: _connected())
-    monkeypatch.setattr(runtime, "validate_guarded_write", lambda capability, parameters: {"success": True, "output": "What if"})
-    monkeypatch.setattr(runtime, "execute_guarded_write", lambda capability, parameters: {"id": "workspace-1"})
-    monkeypatch.setattr(runtime, "execute_read", lambda capability, parameters: {"id": "workspace-1", "displayName": "Finance Lab"})
+    monkeypatch.setattr(runtime, "validate_guarded_write", lambda capability, parameters, **kwargs: {"studio_envelope":1,"success":True,"mode":"what-if","data":[]})
+    monkeypatch.setattr(runtime, "execute_guarded_write", lambda capability, parameters, **kwargs: {"studio_envelope":1,"success":True,"mode":"apply","data":[{"id":"workspace-1"}]})
+    monkeypatch.setattr(runtime, "execute_read", lambda capability, parameters, **kwargs: {"studio_envelope":1,"success":True,"mode":"read","data":[{"id":"workspace-1","displayName":"Finance Lab"}]})
 
     plan = broker.create_plan(_workspace_create(), {"WorkspaceName": "Finance Lab"})
 
@@ -55,8 +55,8 @@ def test_whatif_is_required_before_execution(monkeypatch):
 
     result = broker.execute(plan.plan_id, plan.confirmation_text)
     assert result.plan.status == "executed"
-    assert result.result["id"] == "workspace-1"
-    assert result.verification["displayName"] == "Finance Lab"
+    assert result.result["data"][0]["id"] == "workspace-1"
+    assert result.verification["data"][0]["displayName"] == "Finance Lab"
 
     with pytest.raises(UnsafeOperation, match="status executed"):
         broker.execute(plan.plan_id, plan.confirmation_text)
@@ -66,7 +66,7 @@ def test_plan_cannot_cross_tenant_sessions(monkeypatch):
     broker = MutationBroker()
     current = {"tenant": "tenant-a"}
     monkeypatch.setattr(runtime, "status", lambda: _connected(current["tenant"]))
-    monkeypatch.setattr(runtime, "validate_guarded_write", lambda capability, parameters: {"success": True})
+    monkeypatch.setattr(runtime, "validate_guarded_write", lambda capability, parameters, **kwargs: {"success": True})
 
     plan = broker.create_plan(_workspace_create(), {"WorkspaceName": "Finance Lab"})
     current["tenant"] = "tenant-b"
