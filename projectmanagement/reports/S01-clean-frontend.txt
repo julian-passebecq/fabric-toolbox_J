@@ -1,0 +1,78 @@
+Candidate: 192b6627788de0f22b38f9f6ad38fe7ab539e73e
+Clean checkout: D:\PROJ\s01-qa-2fe35a13
+
+CWD: D:\PROJ\s01-qa-2fe35a13\studio
+COMMAND: ["C:\\Users\\julia\\AppData\\Local\\Temp\\fabric-studio-node22\\node-v22.22.0-win-x64\\npm.cmd", "run", "test", "-w", "frontend", "--", "--run"]
+EXIT: 0; SECONDS: 111.19
+
+> fabric-ops-studio-frontend@0.8.0 test
+> vitest --run
+
+
+ RUN  v4.1.11 D:/PROJ/s01-qa-2fe35a13/studio/frontend
+
+
+ Test Files  3 passed (3)
+      Tests  17 passed (17)
+   Start at  21:50:44
+   Duration  107.45s (transform 1.26s, setup 19.84s, import 195.68s, tests 11.16s, environment 83.54s)
+
+
+CWD: D:\PROJ\s01-qa-2fe35a13\studio
+COMMAND: ["C:\\Users\\julia\\AppData\\Local\\Temp\\fabric-studio-node22\\node-v22.22.0-win-x64\\npm.cmd", "run", "build"]
+EXIT: 0; SECONDS: 27.24
+
+> fabric-ops-studio@0.8.0 build
+> npm run build -w frontend
+
+
+> fabric-ops-studio-frontend@0.8.0 build
+> tsc -b && vite build
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 2162 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                 0.66 kB │ gzip:  0.34 kB
+dist/assets/index-t2C0Vs1_.css                  0.13 kB │ gzip:  0.13 kB
+dist/assets/SpecializedToolsPage-Bam-FXtF.js    2.92 kB │ gzip:  1.31 kB
+dist/assets/SourcesPage-BwzN7_GP.js             3.18 kB │ gzip:  1.27 kB
+dist/assets/ItemExplorerPage-BOnjMGYI.js        3.18 kB │ gzip:  1.48 kB
+dist/assets/ActivityPage-DLs-3sXz.js            3.51 kB │ gzip:  1.56 kB
+dist/assets/DiagnosticsPage-59qnqR2E.js         3.89 kB │ gzip:  1.53 kB
+dist/assets/ChangePlansPage-DhXH9p2n.js         4.94 kB │ gzip:  2.00 kB
+dist/assets/index-CfJ04Vv2.js                  54.71 kB │ gzip: 15.10 kB
+dist/assets/vendor-q5uZfjvM.js                 61.99 kB │ gzip: 19.50 kB
+dist/assets/vendor-fluent-DNddL-P5.js         185.45 kB │ gzip: 50.15 kB
+dist/assets/vendor-react-RStsMsz-.js          192.97 kB │ gzip: 60.53 kB
+✓ built in 6.12s
+
+CWD: D:\PROJ\s01-qa-2fe35a13\studio
+COMMAND: ["C:\\Users\\julia\\AppData\\Local\\Temp\\fabric-studio-node22\\node-v22.22.0-win-x64\\npm.cmd", "run", "test:e2e", "-w", "frontend"]
+EXIT: 0; SECONDS: 56.18
+
+> fabric-ops-studio-frontend@0.8.0 test:e2e
+> playwright test
+
+
+Running 4 tests using 1 worker
+
+  ok 1 e2e\studio.spec.ts:3:1 › real local proxy enforces origin and replaces a supplied credential (8.2s)
+  ok 2 e2e\studio.spec.ts:10:1 › keyboard connect, tenant draft, inventory, and failed reconnect clear context (4.3s)
+  ok 3 e2e\studio.spec.ts:33:1 › offline catalog visibly blocks execution (1.4s)
+  ok 4 e2e\studio.spec.ts:42:1 › guarded workflow applies once and exports the displayed read data (13.6s)
+
+  4 passed (35.1s)
+[2m[WebServer] [22mINFO:     Started server process [30596]
+[2m[WebServer] [22mINFO:     Waiting for application startup.
+[2m[WebServer] [22mINFO:     Application startup complete.
+[2m[WebServer] [22mINFO:     Uvicorn running on http://127.0.0.1:18765 (Press CTRL+C to quit)
+[2m[WebServer] [22m(node:42880) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+[2m[WebServer] [22m(node:21524) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51316) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51316) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)

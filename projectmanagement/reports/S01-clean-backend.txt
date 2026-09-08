@@ -1,0 +1,28 @@
+Candidate: 79aedecccb5edcffb2b139aea61038e4b4c719d6
+Clean checkout: D:\PROJ\s01-qa-2fe35a13
+
+CWD: D:\PROJ\s01-qa-2fe35a13
+COMMAND: ["D:\\PROJ\\s01-qa-2fe35a13\\studio\\backend\\.venv\\Scripts\\python.exe", "-m", "compileall", "-q", "studio/backend/app", "studio/scripts"]
+EXIT: 0; SECONDS: 0.15
+
+CWD: D:\PROJ\s01-qa-2fe35a13
+COMMAND: ["D:\\PROJ\\s01-qa-2fe35a13\\studio\\backend\\.venv\\Scripts\\python.exe", "-m", "pytest", "-q", "studio/backend/tests"]
+EXIT: 0; SECONDS: 71.55
+........................................................................ [ 50%]
+........................................................................ [100%]
+============================== warnings summary ===============================
+studio\backend\.venv\Lib\site-packages\fastapi\testclient.py:1
+  D:\PROJ\s01-qa-2fe35a13\studio\backend\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+studio\backend\.venv\Lib\site-packages\starlette\testclient.py:53
+  D:\PROJ\s01-qa-2fe35a13\studio\backend\.venv\Lib\site-packages\starlette\testclient.py:53: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+144 passed, 2 warnings in 70.38s (0:01:10)
+
+CWD: D:\PROJ\s01-qa-2fe35a13
+COMMAND: ["pwsh", "-NoProfile", "-File", "studio/scripts/start-studio.ps1", "-NoBrowser", "-SkipInstall", "-SmokeTest", "-PythonPath", "D:\\PROJ\\s01-qa-2fe35a13\\studio\\backend\\.venv\\Scripts\\python.exe", "-ApiPort", "18767", "-UiPort", "15175"]
+EXIT: 0; SECONDS: 6.32
+Studio ready: http://127.0.0.1:15175. Keep this launcher running; Ctrl+C stops its children.
