@@ -192,6 +192,7 @@ def test_real_persistent_powershell_success_stall_and_cleanup(tmp_path):
     worker=session._stderr_thread
     try:
         assert normalize(session.run(wrap_invocation('Get-Fixture')))['data']==[{'id':'one'}]
+        assert normalize(session.run(wrap_invocation("[pscustomobject]@{id='日本語'}")))['data']==[{'id':'日本語'}]
         started=time.monotonic()
         with pytest.raises(Exception):session.run('Start-Sleep -Seconds 60')
         assert time.monotonic()-started<12

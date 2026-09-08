@@ -81,7 +81,7 @@ def test_renderer_rejects_unsupported_values(value):
 
 def test_literal_round_trip_in_powershell():
     value = ["O'Brien", 'line\nnext', '日本語', "$(throw 'injected'); `x"]
-    result = subprocess.run(['pwsh','-NoProfile','-NonInteractive','-Command',_ps_literal(value)+' | ConvertTo-Json -Compress'],capture_output=True,text=True,encoding='utf-8',timeout=20,check=True)
+    result = subprocess.run(['pwsh','-NoProfile','-NonInteractive','-Command',"[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); "+_ps_literal(value)+' | ConvertTo-Json -Compress'],capture_output=True,text=True,encoding='utf-8',timeout=20,check=True)
     assert json.loads(result.stdout) == value
 
 

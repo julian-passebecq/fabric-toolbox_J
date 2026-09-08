@@ -46,6 +46,8 @@ def bounded_session_type(base):
                 self._stderr_thread.start()
                 path = str(self._module_path).replace("'", "''")
                 self._process.stdin.write(
+                    "[Console]::InputEncoding=[System.Text.UTF8Encoding]::new($false); "
+                    "[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); "
                     "$ErrorActionPreference='Stop'; $WarningPreference='SilentlyContinue'; "
                     "$ProgressPreference='SilentlyContinue'; $InformationPreference='SilentlyContinue'; "
                     f"try {{ Import-Module '{path}' -Force; Write-Output '__MGMT_DONE__:0' }} "
