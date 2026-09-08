@@ -3,6 +3,7 @@
 The watchdog kills the owned process to unblock upstream's blocking readline.
 It is joined before returning; no timed-out invocation continues in a worker.
 """
+import base64
 import os
 import subprocess
 import threading
@@ -14,6 +15,11 @@ class CommandInput:
         self.stream = stream
 
     def write(self, text):
+        # pwsh creates its redirected stdin reader before our bootstrap can set
+        # InputEncoding. ASCII framing preserves Unicode on hidden Windows hosts.
+        if not text.isascii():
+            encoded = base64.b64encode(text.encode('utf-8')).decode('ascii')
+            text = ". ([scriptblock]::Create([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encoded + "'))))\n"
         return self.stream.write(text + '\n')
 
     def flush(self):
