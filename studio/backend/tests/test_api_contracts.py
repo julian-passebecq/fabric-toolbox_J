@@ -71,6 +71,8 @@ def test_upstream_failure_connect_read_validate(api):
     assert client.post(f"/api/mutations/{plan['plan_id']}/validate").json()['plan']['status']=='validation_failed'
     assert client.post('/api/session/connect',json={'tenant_id':'tenant-a'}).status_code==503
     assert not runtime.status().connected and runtime.status().generation!=old
+    from app.activity import read_activity
+    assert any(row['action']=='session.connect' and row['status']=='failed' and row['duration_ms']>=0 for row in read_activity())
 
 
 def test_unknown_command_capacity_and_stale_client_generation_do_not_dispatch(api):

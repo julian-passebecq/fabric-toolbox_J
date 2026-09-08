@@ -65,6 +65,14 @@ def test_types(kind,value,valid):
             validate_parameters(c,{'p':value})
 
 
+def test_validate_set_and_explicit_false_boolean_rendering():
+    from app.providers.microsoftfabricmgmt import _command_invocation
+    c=Capability(id='fixture',title='fixture',category='test',provider='MicrosoftFabricMgmt',source='test',command='Get-Fixture',parameters=['Mode','Flag'],parameter_specs=[ParameterSpec(name='Mode',allowed_values=['One','Two']),ParameterSpec(name='Flag',type='bool')])
+    with pytest.raises(ValueError,match='ValidateSet'):validate_parameters(c,{'Mode':'Three'})
+    assert validate_parameters(c,{'Mode':'one'})=={'Mode':'one'}
+    assert '-Flag $false' in _command_invocation(c,{'Flag':False})
+
+
 @pytest.mark.parametrize('value',[float('nan'),float('inf'),object(),{}])
 def test_renderer_rejects_unsupported_values(value):
     with pytest.raises(ValueError):

@@ -200,7 +200,7 @@ def test_real_persistent_powershell_success_stall_and_cleanup(tmp_path):
     finally:session.close()
 
 
-@pytest.mark.parametrize('field,value',[('expires_at','2099-01-01T00:00:00Z'),('session_generation','tamper'),('rendered_command','tamper'),('parameters',{'WorkspaceName':'tamper'}),('digest','0'*64)])
+@pytest.mark.parametrize('field,value',[('expires_at','2099-01-01T00:00:00Z'),('session_generation','tamper'),('artifact_identity','tamper'),('rendered_command','tamper'),('parameters',{'WorkspaceName':'tamper'}),('digest','0'*64)])
 def test_each_approval_field_is_checked(setup,field,value):
     b,r,c,calls=setup
     p=create(setup)
@@ -226,6 +226,27 @@ def test_queue_expiry_blocks_actual_dispatch(setup,monkeypatch):
             monkeypatch.setattr(mutations,'_utcnow',lambda:now+timedelta(hours=1))
         assert future.result(5).plan.status=='failed'
     assert calls.count('apply')==0
+
+
+@pytest.mark.parametrize('stage',['validate','apply'])
+def test_queued_mutation_never_enters_replacement_session(setup,monkeypatch,stage):
+    b,r,c,calls=setup
+    p=create(setup)
+    if stage=='apply':b.validate(p.plan_id)
+    queued=threading.Event()
+    method='validate_guarded_write' if stage=='validate' else 'execute_guarded_write'
+    original=getattr(r,method)
+    def run(*args,**kwargs):
+        queued.set()
+        return original(*args,**kwargs)
+    monkeypatch.setattr(r,method,run)
+    with ThreadPoolExecutor(1) as pool:
+        with r._lock:
+            future=pool.submit(b.validate,p.plan_id) if stage=='validate' else pool.submit(b.execute,p.plan_id,p.confirmation_text)
+            assert queued.wait(5)
+            r._invalidate();r._connected=True;r._tenant_id='tenant-b'
+        assert future.result(5).plan.status in {'failed','validation_failed'}
+    assert calls==([] if stage=='validate' else ['what-if'])
 
 
 @pytest.mark.parametrize('fail_start',[True,False])

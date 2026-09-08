@@ -36,7 +36,8 @@ async def local_boundary(request, call_next):
         response=JSONResponse({'detail':'Local operation failed; inspect activity and current state before retrying a write'},status_code=500)
     if request.method!='GET' or rejection:
         try:
-            append_activity({**event,'status':'rejected' if response.status_code>=400 else 'succeeded','http_status':response.status_code,'duration_ms':round((time.monotonic()-started)*1000,2)})
+            status='rejected' if rejection or 400<=response.status_code<500 else 'failed' if response.status_code>=500 else 'succeeded'
+            append_activity({**event,'status':status,'http_status':response.status_code,'duration_ms':round((time.monotonic()-started)*1000,2)})
         except OSError:
             response.headers['X-Studio-Audit-Warning']='Outcome could not be persisted; do not replay a write'
     response.headers['X-Studio-Run-Id']=run_id
