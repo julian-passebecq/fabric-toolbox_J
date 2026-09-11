@@ -1,5 +1,10 @@
 # Fabric Ops Studio project management
 
+**2026-09-11 handover:** start with [the Pro AI takeover](../handover/README.md).
+The user is replacing the multi-agent workflow below with one successor.
+The following planning and role documents are preserved as historical requirements
+and evidence; they do not require restarting that workflow.
+
 This folder is the working agreement for the tech lead, medium development
 model, and light test model. The user owns product priorities. The tech lead
 owns architecture, sprint admission, code-logic acceptance, and the next sprint.

@@ -1,5 +1,16 @@
 # Current delivery state
 
+## 2026-09-11 preservation update
+
+Work is handed to a single Pro AI on `codex/pro-ai-handover-2026-09-11`.
+Start at [handover/README.md](../handover/README.md), then consult
+[publication evidence](../handover/PUBLICATION.md). S01 remains unaccepted and
+production writes remain suspended. No application code was changed in this pass.
+The untracked documents noted below are now preserved on the handover branch;
+the publication record supersedes the historical no-push statement.
+
+## Historical development checkpoint
+
 Updated: 2026-09-08 by medium development model.
 
 | Field | Value |
