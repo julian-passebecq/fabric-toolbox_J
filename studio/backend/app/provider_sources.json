@@ -10,7 +10,7 @@
   "Private/Select-FabricResource.ps1": "6766f714b6e850290e50758fd927b6a77557a18a9b90c7ff65039e3e48f0fc0f",
   "Private/Test-TokenExpired.ps1": "038a664a37b60c54436e2deb6eddf32c97c3a50996f7000db7d91898a38fa354",
   "Private/Write-FabricLog.ps1": "57c7a32b046272885a5d284ecc84a14be74611e3b47f09843a36597a822a6f5c",
-  "Public/Utils/Invoke-FabricAPIRequest.ps1": "30fdd79e5bde102fe6849e4dfa3a7e68c323807b4a684a331aaf7b471d25bb52",
+  "Public/Utils/Invoke-FabricAPIRequest.ps1": "37c937a49c39666253ad9bda22721169323a1afc54cc5187dacc9de38b025f0e",
   "Public/Utils/Get-FabricLongRunningOperation.ps1": "d4e0fac00aba1e8df11c772955645e5ce9e92b4459801b333128f8414a23580e",
   "Public/Utils/Get-FabricLongRunningOperationResult.ps1": "5cb7543865506cbcc0ae458ce0a26b1e33225f4c6772a9dba53c6b6d521e3beb",
   "Public/Utils/Connect-FabricAccount.ps1": "9a50873e539b9c448ef44c7061dacecff52274d9e97f679e9e7b84620e51b196"

@@ -62,6 +62,38 @@ def normalize(raw: str, mode: str = 'read') -> dict:
     # object (unary comma). Remove only that invocation-container level.
     if len(data) == 1 and isinstance(data[0], list):
         data = data[0]
+
+    # Reviewed Studio writes use a narrow transport envelope emitted by the
+    # PowerShell helper. It contains only status/correlation/dispatch evidence
+    # and never arbitrary headers or response bodies.
+    if mode == 'apply' and len(data) == 1 and isinstance(data[0], dict) and data[0].get('studio_transport_outcome') == 1:
+        transport = data[0]
+        state = transport.get('state')
+        status_code = transport.get('statusCode')
+        dispatch_count = transport.get('dispatchCount')
+        correlation_id = transport.get('correlationId')
+        if type(dispatch_count) is not int or dispatch_count != 1:
+            raise OutcomeUnknown('Write transport reported an unexpected dispatch count')
+        if status_code is not None and type(status_code) is not int:
+            raise OutcomeUnknown('Write transport reported an invalid HTTP status')
+        if correlation_id is not None and (not isinstance(correlation_id, str) or len(correlation_id) > 200):
+            raise OutcomeUnknown('Write transport reported an invalid correlation identifier')
+        detail = f'HTTP {status_code}' if status_code is not None else 'no HTTP status'
+        if correlation_id:
+            detail += f', correlation {correlation_id}'
+        if state == 'failed':
+            raise InvocationFailure(f'Fabric rejected the write ({detail})')
+        if state == 'outcome_unknown':
+            raise OutcomeUnknown(f'Fabric write outcome is unknown ({detail})')
+        if state == 'accepted':
+            if status_code != 202:
+                raise OutcomeUnknown('Accepted write transport outcome did not report HTTP 202')
+        elif state == 'succeeded':
+            if status_code not in {200, 201, 204}:
+                raise OutcomeUnknown('Successful write transport outcome reported an unexpected HTTP status')
+        else:
+            raise OutcomeUnknown('Unknown write transport state')
+
     if any(isinstance(x, dict) and x.get('success') is False and 'error_type' in x for x in data):
         raise InvocationFailure('Upstream operation failed')
     if mode == 'what-if':

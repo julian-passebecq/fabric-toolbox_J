@@ -127,6 +127,33 @@ def test_apply_failures_no_replay(setup,monkeypatch,failure,status):
     with pytest.raises(UnsafeOperation): b.execute(p.plan_id,p.confirmation_text)
 
 
+def test_async_acceptance_is_terminal_unknown_until_verified(setup,monkeypatch):
+    b,r,c,calls=setup
+    p=create(setup);b.validate(p.plan_id)
+    def run(command,*,mode='read'):
+        calls.append(mode)
+        if mode=='apply':
+            return envelope(mode,[{
+                'studio_transport_outcome':1,
+                'state':'accepted',
+                'statusCode':202,
+                'dispatchCount':1,
+                'correlationId':'corr-123',
+                'operationId':'op-456',
+                'retryAfter':'2',
+            }])
+        raise AssertionError('Accepted async write must not be reported complete from an immediate read-back')
+    monkeypatch.setattr(r,'run_json',run)
+    result=b.execute(p.plan_id,p.confirmation_text)
+    assert result.plan.status=='outcome_unknown'
+    assert result.plan.apply_outcome=='accepted'
+    assert result.plan.verification_outcome=='not_verified'
+    assert result.verification is None
+    assert calls.count('apply')==1
+    assert calls.count('read')==0
+    with pytest.raises(UnsafeOperation): b.execute(p.plan_id,p.confirmation_text)
+
+
 @pytest.mark.parametrize('apply,read,update,status',[
     ([],[],False,'applied_unverified'),
     ([{'id':'one'}],[{'id':'wrong','displayName':'Lab'}],False,'applied_unverified'),
