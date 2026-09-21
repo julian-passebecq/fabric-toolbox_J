@@ -84,6 +84,9 @@ function Update-FabricWorkspace {
                 BaseURI = $apiEndpointURI
                 Method = 'Patch'
                 Body = $bodyJson
+                MaxRetries = 0
+                SingleDispatch = $true
+                ReturnTransportOutcome = $true
             }
 
             if ($PSCmdlet.ShouldProcess("Workspace '$WorkspaceId' to '$WorkspaceName'", 'Update')) {

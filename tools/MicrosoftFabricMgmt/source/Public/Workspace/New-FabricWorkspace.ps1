@@ -82,6 +82,9 @@ function New-FabricWorkspace {
             Headers = $script:FabricAuthContext.FabricHeaders
             Method = 'Post'
             Body = $bodyJson
+            MaxRetries = 0
+            SingleDispatch = $true
+            ReturnTransportOutcome = $true
         }
 
         if ($PSCmdlet.ShouldProcess("Workspace '$WorkspaceName'", 'Create')) {

@@ -75,20 +75,96 @@ function Invoke-FabricAPIRequest {
         [int]$MaxRetries,
 
         [Parameter(Mandatory = $false)]
-        [int]$RetryBackoffMultiplier
+        [int]$RetryBackoffMultiplier,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$SingleDispatch,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$ReturnTransportOutcome
     )
     try {
-        # Get retry configuration from PSFramework or use provided values
-        if (-not $MaxRetries) {
+        # Get retry configuration from PSFramework only when the caller did not
+        # explicitly bind a value. In particular, MaxRetries=0 must mean zero.
+        if (-not $PSBoundParameters.ContainsKey('MaxRetries')) {
             $MaxRetries = Get-PSFConfigValue -FullName 'MicrosoftFabricMgmt.Api.RetryMaxAttempts' -Fallback 3
         }
-        if (-not $RetryBackoffMultiplier) {
+        if (-not $PSBoundParameters.ContainsKey('RetryBackoffMultiplier')) {
             $RetryBackoffMultiplier = Get-PSFConfigValue -FullName 'MicrosoftFabricMgmt.Api.RetryBackoffMultiplier' -Fallback 2
+        }
+        if ($SingleDispatch.IsPresent) {
+            $MaxRetries = 0
         }
 
         # Initialize continuation token and results collection
         $continuationToken = $null
         $results = New-Object System.Collections.Generic.List[Object]
+        $dispatchCount = 0
+
+        # Studio write mode returns only allowlisted transport evidence. It never
+        # serializes request/response headers or arbitrary response bodies.
+        $getSafeHeader = {
+            param($HeaderCollection, [string[]]$Names)
+            if ($null -eq $HeaderCollection) {
+                return $null
+            }
+            foreach ($name in $Names) {
+                foreach ($entry in $HeaderCollection.GetEnumerator()) {
+                    if ([string]$entry.Key -ieq $name) {
+                        $value = $entry.Value
+                        if ($value -is [System.Array]) {
+                            $value = $value[0]
+                        }
+                        $text = [string]$value
+                        if ($text.Length -le 200 -and $text -match '^[A-Za-z0-9._:-]+$') {
+                            return $text
+                        }
+                    }
+                }
+            }
+            return $null
+        }
+
+        $buildTransportOutcome = {
+            param([string]$State, $StatusCode, $ResponseHeaders, $Response, [int]$DispatchCount)
+
+            $correlationId = & $getSafeHeader $ResponseHeaders @(
+                'x-ms-request-id',
+                'request-id',
+                'x-ms-correlation-id',
+                'correlation-id'
+            )
+            if (-not $correlationId -and $Response -and
+                $Response.PSObject.Properties.Name -contains 'requestId') {
+                $candidate = [string]$Response.requestId
+                if ($candidate.Length -le 200 -and $candidate -match '^[A-Za-z0-9._:-]+$') {
+                    $correlationId = $candidate
+                }
+            }
+
+            $resourceId = $null
+            if ($Response -and $Response.PSObject.Properties.Name -contains 'id') {
+                $candidate = [string]$Response.id
+                if ($candidate.Length -le 200 -and $candidate -match '^[A-Za-z0-9._:-]+$') {
+                    $resourceId = $candidate
+                }
+            }
+
+            $operationId = & $getSafeHeader $ResponseHeaders @('x-ms-operation-id')
+            $retryAfter = & $getSafeHeader $ResponseHeaders @('Retry-After')
+            $statusValue = if ($null -eq $StatusCode) { $null } else { [int]$StatusCode }
+
+            [PSCustomObject]@{
+                studio_transport_outcome = 1
+                state                    = $State
+                statusCode               = $statusValue
+                dispatchCount            = $DispatchCount
+                correlationId            = $correlationId
+                id                       = $resourceId
+                operationId              = $operationId
+                retryAfter                = $retryAfter
+            }
+        }
 
         # Log initial request details for debugging
         Write-FabricLog -Message "Invoke-FabricAPIRequest: Method=$Method, BaseURI=$BaseURI, HasBody=$(-not [string]::IsNullOrEmpty($Body))" -Level Debug
@@ -138,7 +214,32 @@ function Invoke-FabricAPIRequest {
             $shouldRetry = $true
 
             while ($shouldRetry) {
-                $response = Invoke-RestMethod @invokeParams
+                try {
+                    $dispatchCount++
+                    $response = Invoke-RestMethod @invokeParams
+                }
+                catch {
+                    if ($ReturnTransportOutcome.IsPresent -and $dispatchCount -gt 0) {
+                        $exceptionStatus = $null
+                        $exceptionHeaders = $null
+                        if ($_.Exception.Response) {
+                            if ($_.Exception.Response.StatusCode) {
+                                try { $exceptionStatus = [int]$_.Exception.Response.StatusCode } catch { $exceptionStatus = $null }
+                            }
+                            if ($_.Exception.Response.Headers) {
+                                $exceptionHeaders = $_.Exception.Response.Headers
+                            }
+                        }
+                        $exceptionState = if ($exceptionStatus -in @(400, 401, 403, 404, 409, 429)) {
+                            'failed'
+                        }
+                        else {
+                            'outcome_unknown'
+                        }
+                        return & $buildTransportOutcome $exceptionState $exceptionStatus $exceptionHeaders $null $dispatchCount
+                    }
+                    throw
+                }
                 Write-FabricLog -Message "API response code: $statusCode" -Level Debug
 
                 # Check if this is a transient failure that should be retried
@@ -164,6 +265,22 @@ function Invoke-FabricAPIRequest {
 
             # Handle response based on HTTP status code
             Write-FabricLog -Message "API response status code: $statusCode" -Level Debug
+
+            if ($ReturnTransportOutcome.IsPresent) {
+                $transportState = if ($statusCode -in @(200, 201, 204)) {
+                    'succeeded'
+                }
+                elseif ($statusCode -eq 202) {
+                    'accepted'
+                }
+                elseif ($null -eq $statusCode -or [int]$statusCode -ge 500) {
+                    'outcome_unknown'
+                }
+                else {
+                    'failed'
+                }
+                return & $buildTransportOutcome $transportState $statusCode $responseHeader $response $dispatchCount
+            }
 
             switch ($statusCode) {
                 200 {
@@ -261,6 +378,11 @@ function Invoke-FabricAPIRequest {
                         }
                     }
                 }
+                204 {
+                    Write-FabricLog -Message "API call succeeded (204 No Content)." -Level Debug
+                    $continuationToken = $null
+                    return
+                }
                 # Handle common HTTP error codes
                 400 { $errorMsg = "Bad Request" }
                 401 { $errorMsg = "Unauthorized" }
@@ -278,7 +400,7 @@ function Invoke-FabricAPIRequest {
             }
 
             # Throw error for unsuccessful responses
-            if ($statusCode -notin 200, 201, 202) {
+            if ($statusCode -notin 200, 201, 202, 204) {
                 # Try to extract meaningful error details from the response
                 $errorDetails = $errorMsg
 
@@ -334,6 +456,11 @@ function Invoke-FabricAPIRequest {
                 # in their catch blocks via $script:FabricLastAPIError (PS7 has no ErrorDetails.Message)
                 $script:FabricLastAPIError = $response
                 throw "API request failed with status code $statusCode ($errorMsg). $errorDetails"
+            }
+
+            # A single-dispatch request may never replay a mutation via pagination.
+            if ($SingleDispatch.IsPresent) {
+                $continuationToken = $null
             }
 
         } while ($null -ne $continuationToken)

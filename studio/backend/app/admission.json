@@ -40,7 +40,7 @@
     "rationale": "S01 reviewed workspace/inventory GET or registered Items/Job Scheduler/Git GET; workspace writes limited to name/description."
   },
   "ps-workspace-new-fabricworkspace": {
-    "fingerprint": "068ba260a3ffc6d48e515766d21efb99a516ec0eb82ea6f442b3651b2fab02b6",
+    "fingerprint": "5c7c0039a70010fbe33f1fe3a2b1b95a71cdae2e32bb0ca880f99c22c8dc813b",
     "policy": "guarded-write",
     "rationale": "S01 reviewed workspace/inventory GET or registered Items/Job Scheduler/Git GET; workspace writes limited to name/description."
   },
@@ -55,7 +55,7 @@
     "rationale": "S01 reviewed workspace/inventory GET or registered Items/Job Scheduler/Git GET; workspace writes limited to name/description."
   },
   "ps-workspace-update-fabricworkspace": {
-    "fingerprint": "44feb411cade72e0acfc586f1d3b1ef8620ca6bc368ef4fbb56d9723ae4bc5db",
+    "fingerprint": "62e9f1989a946b6ca161ac4849d740f7b660d431417e5add33bbd469ffd9b0c7",
     "policy": "guarded-write",
     "rationale": "S01 reviewed workspace/inventory GET or registered Items/Job Scheduler/Git GET; workspace writes limited to name/description."
   }
