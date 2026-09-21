@@ -198,6 +198,16 @@ class MutationBroker:
             result=runtime.execute_guarded_write(capability,claimed.parameters,expected=self._expected(claimed),before_dispatch=before)
             if result.get('studio_envelope')!=1 or result.get('success') is not True or result.get('mode')!='apply':
                 raise InvocationFailure('Provider apply failed')
+            data=result.get('data',[])
+            if (len(data)==1 and isinstance(data[0],dict)
+                and data[0].get('studio_transport_outcome')==1
+                and data[0].get('state')=='accepted'):
+                plan=self._finish(
+                    claimed,'outcome_unknown',apply_outcome='accepted',
+                    verification_outcome='not_verified',
+                    reason='Fabric accepted the asynchronous write but completion is not verified; inspect remote state before creating another plan'
+                )
+                return MutationExecutionResult(plan=self._audit_end(plan,started),result=result)
         except Exception as exc:
             status='failed' if isinstance(exc,InvocationFailure) or not dispatched else 'outcome_unknown'
             plan=self._finish(claimed,status,apply_outcome=status,reason='Inspect remote state before creating another plan' if status=='outcome_unknown' else 'Apply was not confirmed successful')
