@@ -303,6 +303,41 @@ def _load_verified_bundle(path: Path) -> tuple[dict[str, Any], dict[str, bytes]]
     if _sha256(_canonical_json(project)) != descriptor.get("projectDigest"):
         raise ReleaseBundleError("bundle.project_digest", "Project snapshot digest does not match release metadata")
 
+    profile_name = descriptor.get("profile")
+    validation = validate_project(project, profile_name=profile_name if isinstance(profile_name, str) else None)
+    if not validation.valid or not isinstance(profile_name, str) or profile_name not in project.get("profiles", {}):
+        raise ReleaseBundleError("bundle.project_contract", "Bundled project snapshot is not a valid project/profile contract")
+    profile = project["profiles"][profile_name]
+    if descriptor.get("projectId") != project["projectId"] or descriptor.get("projectSchemaVersion") != project["schemaVersion"]:
+        raise ReleaseBundleError("bundle.scope_project_mismatch", "Release identity does not match the bundled project")
+    if descriptor.get("target") != {
+        "workspaceDisplayName": profile["workspaceDisplayName"],
+        "capacityRef": profile["capacityRef"],
+        "identityRef": profile["identityRef"],
+        "deploymentOwner": profile["deploymentOwner"],
+    }:
+        raise ReleaseBundleError("bundle.scope_project_mismatch", "Release target does not match the selected project profile")
+    if descriptor.get("studioPublishAllowed") is not (profile["deploymentOwner"] == "studio-runner"):
+        raise ReleaseBundleError("bundle.scope_project_mismatch", "Release deployment ownership does not match the project profile")
+    if descriptor.get("dataFlows") != project["dataFlows"]:
+        raise ReleaseBundleError("bundle.scope_project_mismatch", "Release data-flow scope does not match the project contract")
+
+    descriptor_resources = descriptor.get("resources")
+    if not isinstance(descriptor_resources, list) or len(descriptor_resources) != len(project["resources"]):
+        raise ReleaseBundleError("bundle.scope_project_mismatch", "Release resource scope does not match the project contract")
+    for declared, bundled in zip(project["resources"], descriptor_resources, strict=True):
+        expected = {
+            "key": declared["key"],
+            "type": declared["type"],
+            "displayName": declared["displayName"],
+            "management": declared["management"],
+            "definitionPath": declared["definitionPath"],
+            "dependsOn": declared["dependsOn"],
+            "included": declared["management"] == "managed",
+        }
+        if not isinstance(bundled, dict) or any(bundled.get(key) != value for key, value in expected.items()):
+            raise ReleaseBundleError("bundle.scope_project_mismatch", f"Release resource metadata differs from project contract: {declared['key']}")
+
     scope_copy = dict(descriptor)
     claimed_scope = scope_copy.pop("scopeDigest", None)
     actual_scope = _sha256(_canonical_json(scope_copy))
