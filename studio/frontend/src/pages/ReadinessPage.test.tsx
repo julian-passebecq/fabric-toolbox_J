@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { expect, test, vi } from 'vitest';
+import { beforeEach, expect, test, vi } from 'vitest';
 import { ReadinessPage } from './ReadinessPage';
 import { ILLUSTRATIVE_FOIL_PROJECT } from '../data/foil-project';
 import * as api from '../api/client';
@@ -8,6 +8,10 @@ import * as api from '../api/client';
 vi.mock('../api/client', async () => {
   const actual = await vi.importActual<typeof import('../api/client')>('../api/client');
   return { ...actual, getProjectReadiness: vi.fn() };
+});
+
+beforeEach(() => {
+  vi.clearAllMocks();
 });
 
 const report: api.ProjectReadinessReport = {
