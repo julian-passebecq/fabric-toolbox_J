@@ -187,3 +187,30 @@ def test_rehashed_descriptor_cannot_change_project_target(tmp_path):
     with pytest.raises(ReleaseBundleError) as error:
         verify_release_bundle(altered)
     assert error.value.code == "bundle.scope_project_mismatch"
+
+
+def test_unknown_release_descriptor_field_is_rejected(tmp_path):
+    manifest = project()
+    root = tmp_path / "project"; root.mkdir()
+    materialize(root, manifest)
+    bundle = tmp_path / "release.zip"
+    build_release_bundle(manifest, project_root=root, profile_name="dev", revision="r1", output_path=bundle)
+
+    with zipfile.ZipFile(bundle, "r") as source:
+        entries = {name: source.read(name) for name in source.namelist()}
+    descriptor = json.loads(entries["release/manifest.json"])
+    descriptor["futureOverride"] = True
+    scope = dict(descriptor)
+    scope.pop("scopeDigest")
+    import hashlib
+    canonical = (json.dumps(scope, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n").encode("utf-8")
+    descriptor["scopeDigest"] = hashlib.sha256(canonical).hexdigest()
+    entries["release/manifest.json"] = (json.dumps(descriptor, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n").encode("utf-8")
+    altered = tmp_path / "unknown-field.zip"
+    with zipfile.ZipFile(altered, "w") as archive:
+        for name, content in entries.items():
+            archive.writestr(name, content)
+
+    with pytest.raises(ReleaseBundleError) as error:
+        verify_release_bundle(altered)
+    assert error.value.code == "bundle.schema"

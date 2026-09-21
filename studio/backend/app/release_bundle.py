@@ -300,6 +300,16 @@ def _load_verified_bundle(path: Path) -> tuple[dict[str, Any], dict[str, bytes]]
 
     if descriptor.get("schemaVersion") != BUNDLE_SCHEMA_VERSION or descriptor.get("kind") != BUNDLE_KIND:
         raise ReleaseBundleError("bundle.schema", "Unsupported release bundle schema")
+    expected_descriptor_keys = {
+        "schemaVersion", "kind", "projectId", "projectSchemaVersion", "profile", "revision",
+        "target", "studioPublishAllowed", "projectDigest", "resources", "dataFlows", "scopeDigest",
+    }
+    if set(descriptor) != expected_descriptor_keys:
+        raise ReleaseBundleError("bundle.schema", "Release descriptor contains missing or unknown fields")
+    if not isinstance(descriptor.get("target"), dict) or set(descriptor["target"]) != {
+        "workspaceDisplayName", "capacityRef", "identityRef", "deploymentOwner"
+    }:
+        raise ReleaseBundleError("bundle.schema", "Release target contains missing or unknown fields")
     if _sha256(_canonical_json(project)) != descriptor.get("projectDigest"):
         raise ReleaseBundleError("bundle.project_digest", "Project snapshot digest does not match release metadata")
 
@@ -346,7 +356,16 @@ def _load_verified_bundle(path: Path) -> tuple[dict[str, Any], dict[str, bytes]]
 
     expected_artifacts: set[str] = set()
     for resource in descriptor.get("resources", []):
+        if not isinstance(resource, dict) or set(resource) != {
+            "key", "type", "displayName", "management", "definitionPath", "dependsOn",
+            "included", "files", "resourceDigest",
+        }:
+            raise ReleaseBundleError("bundle.schema", "Release resource contains missing or unknown fields")
         files = resource.get("files", [])
+        if not isinstance(files, list):
+            raise ReleaseBundleError("bundle.schema", "Release resource files must be an array")
+        if any(not isinstance(item, dict) or set(item) != {"path", "sha256", "size"} for item in files):
+            raise ReleaseBundleError("bundle.schema", "Release file metadata contains missing or unknown fields")
         if resource.get("included"):
             if not files:
                 raise ReleaseBundleError("bundle.metadata", "Included resource has no files")
