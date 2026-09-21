@@ -230,7 +230,7 @@ def build_release_bundle(
 
     output = output_path.resolve(strict=False)
     output.parent.mkdir(parents=True, exist_ok=True)
-    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_BINARY", 0)
     fd: int | None = None
     try:
         fd = os.open(output, flags, 0o600)
@@ -401,7 +401,7 @@ def import_release_bundle(bundle_path: Path, destination_root: Path) -> Path:
     """
     descriptor, payloads = _load_verified_bundle(bundle_path)
     destination = destination_root.resolve(strict=False)
-    if destination.exists():
+    if destination.exists() or destination.is_symlink():
         raise ReleaseBundleError("import.destination_exists", "Import destination already exists")
 
     destination.parent.mkdir(parents=True, exist_ok=True)

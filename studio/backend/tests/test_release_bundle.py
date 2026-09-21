@@ -148,3 +148,14 @@ def test_import_rejects_existing_destination(tmp_path):
     with pytest.raises(ReleaseBundleError) as error:
         import_release_bundle(bundle, destination)
     assert error.value.code == "import.destination_exists"
+
+
+def test_verifier_rejects_zip_slip_paths(tmp_path):
+    malicious = tmp_path / "malicious.zip"
+    with zipfile.ZipFile(malicious, "w") as archive:
+        archive.writestr("../escape.txt", b"escape")
+        archive.writestr("release/manifest.json", b"{}")
+        archive.writestr("release/project.json", b"{}")
+    with pytest.raises(ReleaseBundleError) as error:
+        verify_release_bundle(malicious)
+    assert error.value.code == "bundle.unsafe_path"
