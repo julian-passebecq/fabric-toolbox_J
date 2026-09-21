@@ -32,6 +32,7 @@ import staticCapabilities from './data/capabilities.json';
 import { ILLUSTRATIVE_FOIL_PROJECT } from './data/foil-project';
 import { InventoryPage } from './pages/InventoryPage';
 import { ProjectOverviewPage } from './pages/ProjectOverviewPage';
+import { ReadinessPage } from './pages/ReadinessPage';
 import { OperationsPage } from './pages/OperationsPage';
 import type { ItemContext } from './pages/ItemExplorerPage';
 
@@ -47,6 +48,7 @@ type WorkspaceContext = { id: string; name: string };
 const nav = [
   ['Overview', AppsList24Regular],
   ['Project', AppsList24Regular],
+  ['Readiness', Shield24Regular],
   ['Workspaces', BuildingFactory24Regular],
   ['Change Plans', Shield24Regular],
   ['Items', CloudDatabaseRegular],
@@ -309,6 +311,7 @@ export function App() {
         </div>
         <div className={styles.cards}>
           <Card><CardHeader header={<Subtitle1>Fabric project</Subtitle1>} description="Inspect desired resources, deployment dependencies, declared data flows and evidence-backed runtime state without turning the diagram into an execution surface." /><Button onClick={() => setSection('Project')}>Open project</Button></Card>
+          <Card><CardHeader header={<Subtitle1>Readiness & bootstrap</Subtitle1>} description="Evaluate local configuration, backend session evidence and unresolved tenant checks before any bootstrap mutation can be proposed." /><Button onClick={() => setSection('Readiness')}>Check readiness</Button></Card>
           <Card><CardHeader header={<Subtitle1>Workspace inventory & changes</Subtitle1>} description="Inventory workspaces and use guarded plans for the explicitly allowlisted create/update operations." /><Button onClick={() => setSection('Workspaces')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Change Plans</Subtitle1>} description="Review tenant-bound, expiring, single-use mutation plans created in the current backend session." /><Button onClick={() => setSection('Change Plans')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Item explorer</Subtitle1>} description="Select an item once and inherit its workspace/item IDs across detail, connection, job and schedule operations." /><Button onClick={() => setSection('Items')}>Open</Button></Card>
@@ -334,6 +337,16 @@ export function App() {
           profileName={projectProfile}
           contextKey={`${generation || 'offline'}:${projectProfile}`}
           observations={[]}
+          onProfileChange={changeProjectProfile}
+        />
+      );
+    }
+    if (section === 'Readiness') {
+      return (
+        <ReadinessPage
+          project={ILLUSTRATIVE_FOIL_PROJECT}
+          profileName={projectProfile}
+          contextKey={`${generation || 'offline'}:${projectProfile}`}
           onProfileChange={changeProjectProfile}
         />
       );

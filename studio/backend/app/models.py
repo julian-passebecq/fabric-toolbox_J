@@ -128,3 +128,47 @@ class SessionStatus(BaseModel):
     connected: bool = False
     tenant_id: str | None = None
     generation: str = ''
+
+
+ReadinessStatus = Literal["satisfied", "action_required", "unknown", "blocked", "not_applicable"]
+ReadinessEvidenceKind = Literal["local-contract", "backend-session", "provider-observation", "none"]
+BootstrapActionKind = Literal["user-action", "read", "guarded-write", "local"]
+
+
+class ProjectReadinessRequest(BaseModel):
+    project: dict[str, Any]
+    profile_name: str = Field(min_length=1, max_length=63)
+
+
+class ProjectReadinessCheck(BaseModel):
+    id: str
+    category: str
+    title: str
+    status: ReadinessStatus
+    required: bool
+    evidence_kind: ReadinessEvidenceKind
+    source: str
+    detail: str
+    next_action: str | None = None
+
+
+class BootstrapAction(BaseModel):
+    id: str
+    category: str
+    title: str
+    kind: BootstrapActionKind
+    executable: bool = False
+    reason: str
+
+
+class ProjectReadinessReport(BaseModel):
+    project_id: str
+    profile_name: str
+    workspace_display_name: str
+    evaluated_at: str
+    deployable: bool = False
+    authorization: bool = False
+    summary: str
+    counts: dict[str, int]
+    checks: list[ProjectReadinessCheck]
+    bootstrap_actions: list[BootstrapAction]

@@ -172,6 +172,44 @@ export type Diagnostics = {
   checks: DiagnosticCheck[];
 };
 
+export type ProjectReadinessStatus = 'satisfied' | 'action_required' | 'unknown' | 'blocked' | 'not_applicable';
+export type ReadinessEvidenceKind = 'local-contract' | 'backend-session' | 'provider-observation' | 'none';
+export type BootstrapActionKind = 'user-action' | 'read' | 'guarded-write' | 'local';
+
+export type ProjectReadinessCheck = {
+  id: string;
+  category: string;
+  title: string;
+  status: ProjectReadinessStatus;
+  required: boolean;
+  evidence_kind: ReadinessEvidenceKind;
+  source: string;
+  detail: string;
+  next_action?: string;
+};
+
+export type BootstrapAction = {
+  id: string;
+  category: string;
+  title: string;
+  kind: BootstrapActionKind;
+  executable: boolean;
+  reason: string;
+};
+
+export type ProjectReadinessReport = {
+  project_id: string;
+  profile_name: string;
+  workspace_display_name: string;
+  evaluated_at: string;
+  deployable: boolean;
+  authorization: boolean;
+  summary: string;
+  counts: Record<'satisfied' | 'action_required' | 'unknown' | 'blocked' | 'not_applicable', number>;
+  checks: ProjectReadinessCheck[];
+  bootstrap_actions: BootstrapAction[];
+};
+
 export type ActivityRecord = Record<string, unknown> & { timestamp?: string; action?: string };
 
 let sessionGeneration = '';
@@ -263,4 +301,12 @@ export function getSpecializedTools() {
 
 export function getDiagnostics() {
   return request<Diagnostics>('/api/diagnostics');
+}
+
+
+export function getProjectReadiness(project: unknown, profileName: string) {
+  return request<ProjectReadinessReport>('/api/project/readiness', {
+    method: 'POST',
+    body: JSON.stringify({ project, profile_name: profileName }),
+  });
 }
