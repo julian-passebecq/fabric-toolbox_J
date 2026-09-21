@@ -14,6 +14,8 @@ from .models import (
     MutationPlanRequest,
     MutationValidationResult,
     PreviewRequest,
+    ProjectReadinessRequest,
+    ProjectReadinessReport,
     SessionStatus,
 )
 from .mutations import broker
@@ -28,6 +30,8 @@ from .providers.microsoftfabricmgmt import (
 from .sources import load_source_registry
 from .specialized_tools import list_specialized_tools
 from .boundary import local_boundary
+from .project_contract import ProjectContractError
+from .readiness import evaluate_project_readiness
 
 app = FastAPI(
     title="Fabric Ops Studio API",
@@ -224,6 +228,14 @@ def execute_mutation(plan_id: str, request: MutationApprovalRequest) -> Mutation
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return response
+
+
+@app.post("/api/project/readiness", response_model=ProjectReadinessReport)
+def project_readiness(request: ProjectReadinessRequest) -> ProjectReadinessReport:
+    try:
+        return evaluate_project_readiness(request.project, request.profile_name, runtime.status())
+    except ProjectContractError as exc:
+        raise HTTPException(status_code=400, detail=f"{exc.code}: {exc.message}") from exc
 
 
 @app.get("/api/activity")
