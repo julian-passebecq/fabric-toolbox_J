@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Fabric Ops Studio project manifest - design draft, not a Fabric API schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "mode", "projectId", "displayName", "profiles", "resources", "dataFlows"],
+  "properties": {
+    "schemaVersion": {"const": "1.0-draft"},
+    "mode": {"const": "design_only"},
+    "projectId": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,62}$"},
+    "displayName": {"type": "string", "minLength": 1, "maxLength": 128},
+    "profiles": {
+      "type": "object", "minProperties": 1, "maxProperties": 10,
+      "propertyNames": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,62}$"},
+      "additionalProperties": {
+        "type": "object", "additionalProperties": false,
+        "required": ["workspaceDisplayName", "capacityRef", "identityRef", "deploymentOwner"],
+        "properties": {
+          "workspaceDisplayName": {"type": "string", "minLength": 1, "maxLength": 128},
+          "capacityRef": {"type": "string", "pattern": "^binding:[A-Za-z0-9_./-]+$"},
+          "identityRef": {"type": "string", "pattern": "^auth:[A-Za-z0-9_./-]+$"},
+          "deploymentOwner": {"enum": ["studio-runner", "native-git"]}
+        }
+      }
+    },
+    "resources": {
+      "type": "array", "minItems": 1, "maxItems": 200,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["key", "type", "displayName", "definitionPath", "management", "dependsOn"],
+        "properties": {
+          "key": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,62}$"},
+          "type": {"enum": ["Lakehouse", "Notebook", "Environment", "Eventhouse", "KQLDatabase", "Eventstream", "KQLDashboard", "VariableLibrary", "Reflex"]},
+          "displayName": {"type": "string", "minLength": 1, "maxLength": 128},
+          "definitionPath": {"type": "string", "minLength": 1, "maxLength": 240},
+          "management": {"enum": ["managed", "external"]},
+          "dependsOn": {"type": "array", "items": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,62}$"}, "uniqueItems": true, "maxItems": 100}
+        }
+      }
+    },
+    "dataFlows": {
+      "type": "array", "maxItems": 500,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["from", "to", "kind", "evidence"],
+        "properties": {
+          "from": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,62}$"},
+          "to": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,62}$"},
+          "kind": {"enum": ["events", "query", "batch", "analytical-exposure"]},
+          "evidence": {"const": "declared"}
+        }
+      }
+    },
+    "telemetry": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sourceConnectionRef", "eventIdField", "eventTimeField", "freshnessTargetSeconds"],
+      "properties": {
+        "sourceConnectionRef": {"type": "string", "pattern": "^secretref:[A-Za-z0-9_./-]+$"},
+        "eventIdField": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,62}$"},
+        "eventTimeField": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,62}$"},
+        "freshnessTargetSeconds": {"type": "integer", "minimum": 1, "maximum": 86400}
+      }
+    }
+  }
+}
