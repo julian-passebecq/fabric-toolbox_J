@@ -371,3 +371,36 @@ def test_guarded_kql_dashboard_create_renders_upstream_command():
     assert "& 'New-FabricKQLDashboard'" in command
     assert "-KQLDashboardName 'wind_realtime_dashboard'" in command
     assert "-WhatIf" in command
+
+
+def test_eventstream_definition_read_and_update_are_reviewed():
+    catalog = combined_catalog()
+    read = next(item for item in catalog if item.command == "Get-FabricEventstreamDefinition")
+    update = next(item for item in catalog if item.command == "Update-FabricEventstreamDefinition")
+
+    assert read.risk == "read"
+    assert read.execution_policy == "read"
+    assert {"WorkspaceId", "EventstreamId"}.issubset(set(read.parameters))
+
+    assert update.risk == "write"
+    assert update.execution_policy == "guarded-write"
+    assert update.supports_whatif is True
+    assert update.verification_capability_id == "ps-eventstream-get-fabriceventstreamdefinition"
+    assert update.verification_parameter_map == {
+        "WorkspaceId": "WorkspaceId",
+        "EventstreamId": "EventstreamId",
+    }
+
+    command = build_guarded_write_command(
+        update,
+        {
+            "WorkspaceId": "ws-1",
+            "EventstreamId": "eventstream-1",
+            "EventstreamPathDefinition": "/tmp/eventstream.json",
+        },
+        what_if=True,
+    )
+    assert "& 'Update-FabricEventstreamDefinition'" in command
+    assert "-EventstreamId 'eventstream-1'" in command
+    assert "-EventstreamPathDefinition '/tmp/eventstream.json'" in command
+    assert "-WhatIf" in command

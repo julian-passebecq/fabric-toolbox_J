@@ -104,6 +104,10 @@ class ProjectPlanAction(BaseModel):
     provisioning_parameters: dict[str, Any] = Field(default_factory=dict)
     provisioning_ready: bool = False
     provisioning_reason: str = ""
+    reconciliation_capability_id: str | None = None
+    reconciliation_parameters: dict[str, Any] = Field(default_factory=dict)
+    reconciliation_ready: bool = False
+    reconciliation_reason: str = ""
 
 
 class ProjectPlan(BaseModel):

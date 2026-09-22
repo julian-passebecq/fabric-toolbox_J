@@ -43,6 +43,7 @@ sources:
       - Update-FabricWorkspace
       - New-FabricEventhouse
       - New-FabricEventstream
+      - Update-FabricEventstreamDefinition
       - New-FabricKQLDatabase
       - New-FabricKQLQueryset
       - New-FabricKQLDashboard
@@ -50,7 +51,7 @@ sources:
       - New-FabricNotebook
       - New-FabricEnvironment
       - New-FabricDataPipeline
-    guarded_write_note: These explicitly curated cmdlets are executable as guarded writes in Studio v0.10. Each create supports upstream ShouldProcess/-WhatIf and has a registered name-based read-back capability. KQL Database keeps its parent Eventhouse dependency explicit; other discovered write/admin/destructive commands remain blocked until reviewed.
+    guarded_write_note: These explicitly curated cmdlets are executable as guarded writes in Studio v0.12. Create operations and Eventstream definition reconciliation preserve upstream ShouldProcess/-WhatIf plus registered read-back verification. File-backed definitions are SHA-256 bound to the mutation plan; other discovered write/admin/destructive commands remain blocked until reviewed.
     studio_modifies_upstream: false
 
   - id: microsoftfabricmgmt-session-runtime
@@ -98,13 +99,13 @@ sources:
     update_strategy: studio-branch
     role: project-planning
     feature_source: true
-    execution_status: plan-only
+    execution_status: guarded-planning-and-staging
     safety:
       live_inventory: registered Fabric Items GET API
-      create_updates: blocked
+      create_updates: reviewed-guarded-only
       destructive_changes: blocked
       unmanaged_items: preserved
-    note: Composer loads reviewed project manifests, diffs desired items against selected workspace inventory and produces a non-destructive plan. Apply remains disabled until each create/update path is individually registered and reviewed.
+    note: Composer loads reviewed project manifests, diffs desired items against selected workspace inventory and stages only individually reviewed guarded create/update paths. Existing Eventstream definitions can be reconciled with SHA-bound generated artifacts; unreviewed mutations remain blocked.
   - id: fabric-rest
     name: Microsoft Fabric REST API
     origin: microsoft-official-api

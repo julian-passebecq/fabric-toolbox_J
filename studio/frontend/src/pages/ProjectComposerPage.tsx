@@ -60,6 +60,7 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
   const [planning, setPlanning] = useState(false);
   const [staging, setStaging] = useState(false);
   const [stagedItemIds, setStagedItemIds] = useState<string[]>([]);
+  const [stagedReconciliationItemIds, setStagedReconciliationItemIds] = useState<string[]>([]);
   const [eventstreamArtifact, setEventstreamArtifact] = useState<EventstreamDefinitionArtifact | null>(null);
   const [artifactLoading, setArtifactLoading] = useState(false);
   const [error, setError] = useState('');
@@ -95,6 +96,7 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
     setParameterValues(defaults);
     setPlan(null);
     setStagedItemIds([]);
+    setStagedReconciliationItemIds([]);
     setEventstreamArtifact(null);
   }, [template]);
 
@@ -121,6 +123,21 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
     [readyCreates, stagedItemIds],
   );
 
+  const readyReconciliations = useMemo(
+    () => (plan?.actions ?? []).filter(
+      (action) => action.reconciliation_ready && Boolean(action.reconciliation_capability_id),
+    ),
+    [plan],
+  );
+
+  const unstagedReadyReconciliations = useMemo(
+    () => readyReconciliations.filter(
+      (action) => !stagedReconciliationItemIds.includes(action.item_id),
+    ),
+    [readyReconciliations, stagedReconciliationItemIds],
+  );
+
+
   async function handlePlan() {
     if (!template) return;
     setPlanning(true);
@@ -129,6 +146,7 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
       const result = await planProject(template.id, workspaceContext?.id, parameterValues);
       setPlan(result);
       setStagedItemIds([]);
+      setStagedReconciliationItemIds([]);
     } catch (err) {
       setPlan(null);
       setError(err instanceof Error ? err.message : String(err));
@@ -175,6 +193,45 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
       setStagedItemIds((current) => Array.from(new Set([...current, ...staged])));
     } catch (err) {
       setStagedItemIds((current) => Array.from(new Set([...current, ...staged])));
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setStaging(false);
+    }
+  }
+
+  async function handleStageReconciliations() {
+    if (!template || !unstagedReadyReconciliations.length) return;
+    setStaging(true);
+    setError('');
+    const staged: string[] = [];
+    try {
+      for (const action of unstagedReadyReconciliations) {
+        if (!action.reconciliation_capability_id) continue;
+        const artifact = await getEventstreamDefinitionArtifact(
+          template.id,
+          workspaceContext?.id,
+          parameterValues,
+        );
+        setEventstreamArtifact(artifact);
+        if (!artifact.ready) {
+          throw new Error(
+            `Eventstream definition is not ready: ${artifact.missing_requirements.join(', ')}`,
+          );
+        }
+        await createMutationPlan(
+          action.reconciliation_capability_id,
+          action.reconciliation_parameters,
+          [{
+            parameter: 'EventstreamPathDefinition',
+            filename: artifact.filename,
+            content: JSON.stringify(artifact.definition, null, 2),
+          }],
+        );
+        staged.push(action.item_id);
+      }
+      setStagedReconciliationItemIds((current) => Array.from(new Set([...current, ...staged])));
+    } catch (err) {
+      setStagedReconciliationItemIds((current) => Array.from(new Set([...current, ...staged])));
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setStaging(false);
@@ -353,6 +410,31 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
         </div>
       )}
 
+      {plan && readyReconciliations.length > 0 && (
+        <div className={styles.warning}>
+          <Text weight="semibold">Existing Eventstream definition can be reconciled.</Text>
+          <Text block>
+            This stages a separate SHA-bound update plan; it does not execute the update directly.
+          </Text>
+          <div className={styles.row}>
+            <Button
+              appearance="primary"
+              disabled={staging || unstagedReadyReconciliations.length === 0}
+              onClick={handleStageReconciliations}
+            >
+              {staging
+                ? 'Staging…'
+                : unstagedReadyReconciliations.length > 0
+                  ? `Stage ${unstagedReadyReconciliations.length} definition reconcile plan(s)`
+                  : 'Definition reconcile staged'}
+            </Button>
+            {stagedReconciliationItemIds.length > 0 && (
+              <Button appearance="secondary" onClick={onOpenChangePlans}>Open Change Plans</Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {plan && (
         <div className={styles.stats}>
           {[
@@ -388,13 +470,16 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
                     {item.vscode_handoff && <Badge appearance="tint">VS CODE</Badge>}
                     {action && <Badge appearance={actionAppearance(action.action)}>{action.action.toUpperCase()}</Badge>}
                     {action?.provisioning_ready && <Badge appearance="tint">READY TO STAGE</Badge>}
+                    {action?.reconciliation_ready && <Badge appearance="tint">READY TO RECONCILE</Badge>}
                     {action && stagedItemIds.includes(action.item_id) && <Badge appearance="filled">STAGED</Badge>}
+                    {action && stagedReconciliationItemIds.includes(action.item_id) && <Badge appearance="filled">RECONCILE STAGED</Badge>}
                   </div>
                   {item.depends_on.length > 0 && (
                     <Text block size={200} className={styles.muted}>Depends on: {item.depends_on.join(', ')}</Text>
                   )}
                   {action && <Text block size={200}>{action.reason}</Text>}
                   {action?.provisioning_reason && <Text block size={200} className={styles.muted}>{action.provisioning_reason}</Text>}
+                  {action?.reconciliation_reason && <Text block size={200} className={styles.muted}>{action.reconciliation_reason}</Text>}
                 </Card>
               );
             })}

@@ -228,6 +228,56 @@ def _provisioning_for(
     )
 
 
+
+def _reconciliation_for(
+    desired,
+    action: str,
+    request: ProjectPlanRequest,
+    existing_item: dict[str, Any] | None,
+    existing_by_template_id: dict[str, dict[str, Any]],
+    catalog_by_id: dict[str, Any],
+) -> tuple[str | None, dict[str, Any], bool, str]:
+    if desired.type != "Eventstream":
+        return None, {}, False, ""
+    if action != "unchanged" or not existing_item:
+        return None, {}, False, "Definition reconciliation becomes available after the Eventstream exists in Fabric."
+
+    capability_id = "ps-eventstream-update-fabriceventstreamdefinition"
+    capability = catalog_by_id.get(capability_id)
+    if not capability or capability.execution_policy != "guarded-write":
+        return capability_id, {}, False, "The reviewed Eventstream definition update capability is not enabled."
+
+    if not request.workspace_id:
+        return capability_id, {}, False, "Select the live workspace before reconciling an Eventstream definition."
+
+    eventstream_id = _actual_id(existing_item)
+    if not eventstream_id:
+        return capability_id, {}, False, "The existing Eventstream item ID could not be resolved."
+
+    missing_dependencies = [
+        dependency for dependency in desired.depends_on
+        if dependency not in existing_by_template_id
+    ]
+    if missing_dependencies:
+        return (
+            capability_id,
+            {},
+            False,
+            "Definition reconciliation requires the declared Fabric dependencies first: "
+            + ", ".join(missing_dependencies),
+        )
+
+    return (
+        capability_id,
+        {
+            "WorkspaceId": request.workspace_id,
+            "EventstreamId": eventstream_id,
+        },
+        True,
+        "Existing Eventstream can be reconciled to the generated project definition through a guarded, artifact-bound Change Plan.",
+    )
+
+
 def plan_project(template: ProjectTemplate, request: ProjectPlanRequest) -> ProjectPlan:
     resolved_parameters, missing_parameters = _resolve_parameters(template, request.parameters)
     current_items = request.current_items
@@ -276,11 +326,24 @@ def plan_project(template: ProjectTemplate, request: ProjectPlanRequest) -> Proj
 
     catalog_by_id = {item.id: item for item in combined_catalog()}
     actions: list[ProjectPlanAction] = []
-    for desired, action, reason, _ in desired_status:
+    for desired, action, reason, existing_item in desired_status:
         capability_id, provisioning_parameters, provisioning_ready, provisioning_reason = _provisioning_for(
             desired,
             action,
             request,
+            existing_by_template_id,
+            catalog_by_id,
+        )
+        (
+            reconciliation_capability_id,
+            reconciliation_parameters,
+            reconciliation_ready,
+            reconciliation_reason,
+        ) = _reconciliation_for(
+            desired,
+            action,
+            request,
+            existing_item,
             existing_by_template_id,
             catalog_by_id,
         )
@@ -298,6 +361,10 @@ def plan_project(template: ProjectTemplate, request: ProjectPlanRequest) -> Proj
                 provisioning_parameters=provisioning_parameters,
                 provisioning_ready=provisioning_ready,
                 provisioning_reason=provisioning_reason,
+                reconciliation_capability_id=reconciliation_capability_id,
+                reconciliation_parameters=reconciliation_parameters,
+                reconciliation_ready=reconciliation_ready,
+                reconciliation_reason=reconciliation_reason,
             )
         )
 
