@@ -123,7 +123,7 @@ Specialized tools keep their own authentication, dependency and output lifecycle
 - [x] register definition update flows for Notebook and Data Pipeline
 - [x] execute Composer-staged plans from Change Plans with WhatIf + typed approval
 - [x] one-click dependency-wave staging with explicit per-plan approvals
-- [ ] project manifest export/import
+- [x] project manifest export/import
 - [ ] VS Code Fabric extension deep-link or workspace-folder handoff where supported
 - [x] Foil'o live Oracle/Kafka endpoint parameter set
 - [x] Foil'o Eventstream -> Eventhouse/KQL -> Lakehouse deployment acceptance test
