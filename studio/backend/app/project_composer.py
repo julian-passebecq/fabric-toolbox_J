@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import json
 from collections import Counter
@@ -543,18 +544,20 @@ def build_eventstream_definition(template: ProjectTemplate, request: ProjectPlan
     }
 
 
-def _canonical_json(value: Any) -> Any:
+def _canonical_json(value: Any, parent_key: str | None = None) -> Any:
     if isinstance(value, dict):
-        return {key: _canonical_json(value[key]) for key in sorted(value)}
+        return {
+            key: _canonical_json(value[key], key)
+            for key in sorted(value)
+        }
     if isinstance(value, list):
         canonical = [_canonical_json(item) for item in value]
-        try:
+        if parent_key in {"sources", "destinations", "streams", "operators"}:
             return sorted(
                 canonical,
                 key=lambda item: json.dumps(item, sort_keys=True, separators=(",", ":"), ensure_ascii=False),
             )
-        except TypeError:
-            return canonical
+        return canonical
     return value
 
 
@@ -596,11 +599,11 @@ def _decode_eventstream_definition(result: dict[str, Any]) -> dict[str, Any]:
     payload_type = str(part.get("payloadType") or "")
     try:
         if payload_type.casefold() == "inlinebase64":
-            decoded = base64.b64decode(payload).decode("utf-8-sig")
+            decoded = base64.b64decode(payload, validate=True).decode("utf-8-sig")
         else:
             decoded = payload
         parsed = json.loads(decoded)
-    except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except (ValueError, UnicodeDecodeError, json.JSONDecodeError, binascii.Error) as exc:
         raise ValueError("Live Eventstream eventstream.json payload could not be decoded") from exc
 
     if not isinstance(parsed, dict):
