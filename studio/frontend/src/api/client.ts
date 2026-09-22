@@ -168,6 +168,67 @@ export type Diagnostics = {
   checks: DiagnosticCheck[];
 };
 
+export type ProjectParameter = {
+  name: string;
+  label: string;
+  description: string;
+  type: string;
+  required: boolean;
+  secret: boolean;
+  default?: unknown;
+  allowed_values: string[];
+};
+
+export type ProjectItem = {
+  id: string;
+  type: string;
+  display_name: string;
+  area: string;
+  description: string;
+  depends_on: string[];
+  definition_strategy: 'empty' | 'definition' | 'configure-after-create';
+  vscode_handoff: boolean;
+  settings: Record<string, unknown>;
+};
+
+export type ProjectTemplate = {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  workspace_name: string;
+  workspace_description: string;
+  tags: string[];
+  parameters: ProjectParameter[];
+  items: ProjectItem[];
+};
+
+export type ProjectPlanAction = {
+  item_id: string;
+  display_name: string;
+  item_type: string;
+  area: string;
+  action: 'create' | 'unchanged' | 'conflict' | 'unmanaged';
+  reason: string;
+  depends_on: string[];
+  vscode_handoff: boolean;
+};
+
+export type ProjectPlan = {
+  template_id: string;
+  project_name: string;
+  workspace_name: string;
+  workspace_id?: string;
+  workspace_action: 'create' | 'use-existing';
+  live_inventory: boolean;
+  actions: ProjectPlanAction[];
+  counts: Record<string, number>;
+  resolved_parameters: Record<string, unknown>;
+  missing_parameters: string[];
+  apply_supported: boolean;
+  apply_note: string;
+};
+
 export type ActivityRecord = Record<string, unknown> & { timestamp?: string; action?: string };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -255,4 +316,24 @@ export function getSpecializedTools() {
 
 export function getDiagnostics() {
   return request<Diagnostics>('/api/diagnostics');
+}
+
+
+export function getProjectTemplates() {
+  return request<ProjectTemplate[]>('/api/projects/templates');
+}
+
+export function getProjectTemplate(templateId: string) {
+  return request<ProjectTemplate>(`/api/projects/templates/${encodeURIComponent(templateId)}`);
+}
+
+export function planProject(
+  templateId: string,
+  workspaceId?: string,
+  parameters: Record<string, unknown> = {},
+) {
+  return request<ProjectPlan>(`/api/projects/templates/${encodeURIComponent(templateId)}/plan`, {
+    method: 'POST',
+    body: JSON.stringify({ ...(workspaceId ? { workspace_id: workspaceId } : {}), parameters }),
+  });
 }

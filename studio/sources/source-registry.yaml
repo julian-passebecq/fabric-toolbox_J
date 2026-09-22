@@ -12,6 +12,7 @@ principles:
   - Delegate Fabric long-running-operation polling to MicrosoftFabricMgmt rather than implementing a second poller.
   - Mutating operations are blocked by default and require an explicit guarded-write allowlist entry.
   - Guarded writes are tenant-bound, expiring, hash-bound, single-use plans with typed approval and upstream validation when available.
+  - Declarative project templates may plan against live Fabric inventory, but do not widen mutation authority automatically.
 
 sources:
   - id: microsoftfabricmgmt
@@ -40,7 +41,7 @@ sources:
     guarded_write_scope:
       - New-FabricWorkspace
       - Update-FabricWorkspace
-    guarded_write_note: Only these explicitly curated cmdlets are executable as writes in Studio v0.5. Both support upstream ShouldProcess/-WhatIf. Other discovered write/admin/destructive commands remain blocked.
+    guarded_write_note: Only these explicitly curated cmdlets are executable as writes in Studio v0.8. Both support upstream ShouldProcess/-WhatIf. Other discovered write/admin/destructive commands remain blocked.
     studio_modifies_upstream: false
 
   - id: microsoftfabricmgmt-session-runtime
@@ -77,6 +78,24 @@ sources:
       read_back_verification: true
     note: The broker does not reimplement Fabric management calls. It binds an exact upstream command and parameters to an expiring plan, validates through upstream -WhatIf where available, requires explicit typed approval, executes once, and performs a read-back when configured.
 
+
+  - id: studio-project-composer
+    name: Fabric Ops Studio Project Composer
+    origin: studio-owned
+    owner: julian-passebecq/fabric-toolbox_J
+    local_path: studio/backend/app/project_composer.py
+    templates_path: studio/projects
+    integration: declarative-planning-orchestration
+    update_strategy: studio-branch
+    role: project-planning
+    feature_source: true
+    execution_status: plan-only
+    safety:
+      live_inventory: registered Fabric Items GET API
+      create_updates: blocked
+      destructive_changes: blocked
+      unmanaged_items: preserved
+    note: Composer loads reviewed project manifests, diffs desired items against selected workspace inventory and produces a non-destructive plan. Apply remains disabled until each create/update path is individually registered and reviewed.
   - id: fabric-rest
     name: Microsoft Fabric REST API
     origin: microsoft-official-api

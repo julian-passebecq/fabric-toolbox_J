@@ -14,9 +14,13 @@ from .models import (
     MutationPlanRequest,
     MutationValidationResult,
     PreviewRequest,
+    ProjectPlan,
+    ProjectPlanRequest,
+    ProjectTemplate,
     SessionStatus,
 )
 from .mutations import broker
+from .project_composer import get_project_template, list_project_templates, plan_project
 from .providers.fabric_rest import build_rest_get_command, execute_rest_read
 from .providers.microsoftfabricmgmt import (
     ProviderUnavailable,
@@ -30,8 +34,8 @@ from .specialized_tools import list_specialized_tools
 
 app = FastAPI(
     title="Fabric Ops Studio API",
-    version="0.5.0",
-    description="Fabric operations layer with read execution and explicitly allowlisted guarded writes.",
+    version="0.8.0",
+    description="Fabric operations and declarative project-composition layer with guarded execution.",
 )
 
 
@@ -282,6 +286,51 @@ def execute_mutation(plan_id: str, request: MutationApprovalRequest) -> Mutation
         }
     )
     return response
+
+
+@app.get("/api/projects/templates", response_model=list[ProjectTemplate])
+def project_templates() -> list[ProjectTemplate]:
+    return list_project_templates()
+
+
+@app.get("/api/projects/templates/{template_id}", response_model=ProjectTemplate)
+def project_template(template_id: str) -> ProjectTemplate:
+    try:
+        return get_project_template(template_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/projects/templates/{template_id}/plan", response_model=ProjectPlan)
+def project_plan(template_id: str, request: ProjectPlanRequest | None = None) -> ProjectPlan:
+    try:
+        template = get_project_template(template_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    try:
+        plan = plan_project(template, request or ProjectPlanRequest())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except UnsafeOperation as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ProviderUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    append_activity(
+        {
+            "action": "project.plan",
+            "template_id": template.id,
+            "workspace_id": plan.workspace_id,
+            "workspace_action": plan.workspace_action,
+            "live_inventory": plan.live_inventory,
+            "counts": plan.counts,
+            "apply_supported": plan.apply_supported,
+        }
+    )
+    return plan
 
 
 @app.get("/api/activity")

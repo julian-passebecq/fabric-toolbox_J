@@ -1,5 +1,18 @@
 # Studio changelog
 
+## 0.8.0
+
+- Added the first Project Composer milestone for declarative Fabric project architecture.
+- Added the Foil'o Wind Energy Real-Time Intelligence template covering Eventhouse, KQL Database, Eventstream, KQL Queryset, KQL Dashboard, Lakehouse, Environment, Notebooks and a Data Pipeline.
+- Added live diff planning against a selected Fabric workspace using the existing registered Items read API.
+- Added explicit plan actions for create, unchanged, name/type conflict and unmanaged existing items.
+- Preserved unmanaged workspace content; Composer never proposes implicit deletion.
+- Added VS Code authoring handoff metadata for definition-heavy items.
+- Added the Project Composer Fluent UI page and top-level navigation.
+- Added backend/template tests for RTI coverage, dependency metadata, diff behavior, conflicts and unmanaged-item preservation.
+- Kept Project Composer apply disabled. The guarded-write allowlist remains unchanged until each item-type create/update path has its own reviewed endpoint, validation and verification semantics.
+
+
 ## 0.7.0
 
 - Added first-class item context on top of the existing tenant/workspace context model.
