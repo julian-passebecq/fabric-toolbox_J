@@ -100,6 +100,10 @@ class ProjectPlanAction(BaseModel):
     reason: str
     depends_on: list[str] = Field(default_factory=list)
     vscode_handoff: bool = False
+    provisioning_capability_id: str | None = None
+    provisioning_parameters: dict[str, Any] = Field(default_factory=dict)
+    provisioning_ready: bool = False
+    provisioning_reason: str = ""
 
 
 class ProjectPlan(BaseModel):
