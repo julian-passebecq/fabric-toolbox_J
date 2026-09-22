@@ -1,7 +1,7 @@
 {
   "id": "foilo-wind-rti",
   "name": "Foil'o Wind Energy - Real-Time Fabric",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "End-to-end Fabric project for Oracle/Kafka wind-turbine telemetry, Real-Time Intelligence, medallion processing and engineering handoff.",
   "workspace_name": "Foilo-Wind-Dev",
   "workspace_description": "Foil'o wind-energy telemetry and Microsoft Fabric engineering workspace.",
