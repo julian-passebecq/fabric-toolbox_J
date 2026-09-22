@@ -239,44 +239,6 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
     );
   }
 
-  async function handleStageReady() {
-    if (!unstagedReadyCreates.length) return;
-    setStaging(true);
-    setError('');
-    const staged: string[] = [];
-    try {
-      for (const action of unstagedReadyCreates) {
-        await stageCreateAction(action);
-        staged.push(action.item_id);
-      }
-      setStagedItemIds((current) => Array.from(new Set([...current, ...staged])));
-    } catch (err) {
-      setStagedItemIds((current) => Array.from(new Set([...current, ...staged])));
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setStaging(false);
-    }
-  }
-
-  async function handleStageReconciliations() {
-    if (!unstagedReadyReconciliations.length) return;
-    setStaging(true);
-    setError('');
-    const staged: string[] = [];
-    try {
-      for (const action of unstagedReadyReconciliations) {
-        await stageReconciliationAction(action);
-        staged.push(action.item_id);
-      }
-      setStagedReconciliationItemIds((current) => Array.from(new Set([...current, ...staged])));
-    } catch (err) {
-      setStagedReconciliationItemIds((current) => Array.from(new Set([...current, ...staged])));
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setStaging(false);
-    }
-  }
-
   async function handleStageCurrentWave() {
     if (!template || pendingWaveCount === 0) return;
     setStaging(true);
@@ -569,54 +531,6 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
       {plan && plan.missing_parameters.length > 0 && (
         <div className={styles.warning}>
           <Text weight="semibold">Missing required parameters: {plan.missing_parameters.join(', ')}</Text>
-        </div>
-      )}
-
-      {plan && readyCreates.length > 0 && (
-        <div className={styles.warning}>
-          <Text weight="semibold">{readyCreates.length} create action(s) are dependency-ready.</Text>
-          <Text block>Stage them as tenant-bound guarded change plans. This does not create anything yet.</Text>
-          <div className={styles.row}>
-            <Button
-              appearance="primary"
-              disabled={staging || unstagedReadyCreates.length === 0}
-              onClick={handleStageReady}
-            >
-              {staging
-                ? 'Staging…'
-                : unstagedReadyCreates.length > 0
-                  ? `Stage ${unstagedReadyCreates.length} ready create plan(s)`
-                  : 'Ready creates staged'}
-            </Button>
-            {stagedItemIds.length > 0 && (
-              <Button appearance="secondary" onClick={onOpenChangePlans}>Open Change Plans</Button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {plan && readyReconciliations.length > 0 && (
-        <div className={styles.warning}>
-          <Text weight="semibold">Existing Eventstream definition can be reconciled.</Text>
-          <Text block>
-            This stages a separate SHA-bound update plan; it does not execute the update directly.
-          </Text>
-          <div className={styles.row}>
-            <Button
-              appearance="primary"
-              disabled={staging || unstagedReadyReconciliations.length === 0}
-              onClick={handleStageReconciliations}
-            >
-              {staging
-                ? 'Staging…'
-                : unstagedReadyReconciliations.length > 0
-                  ? `Stage ${unstagedReadyReconciliations.length} definition reconcile plan(s)`
-                  : 'Definition reconcile staged'}
-            </Button>
-            {stagedReconciliationItemIds.length > 0 && (
-              <Button appearance="secondary" onClick={onOpenChangePlans}>Open Change Plans</Button>
-            )}
-          </div>
         </div>
       )}
 
