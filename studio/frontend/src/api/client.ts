@@ -465,6 +465,45 @@ export function importProjectManifest(manifest: ProjectManifest) {
 }
 
 
+export async function downloadVsCodeHandoff(
+  templateId: string,
+  workspaceId?: string,
+  workspaceName?: string,
+  parameters: Record<string, unknown> = {},
+) {
+  const response = await fetch(
+    `/api/projects/templates/${encodeURIComponent(templateId)}/vscode-handoff`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...(workspaceId ? { workspace_id: workspaceId } : {}),
+        ...(workspaceName ? { workspace_name: workspaceName } : {}),
+        parameters,
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    let message = `${response.status} ${response.statusText}`;
+    try {
+      const body = await response.json() as { detail?: string };
+      if (body.detail) message = body.detail;
+    } catch {
+      // keep HTTP status text
+    }
+    throw new Error(message);
+  }
+
+  const disposition = response.headers.get('Content-Disposition') ?? '';
+  const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
+  return {
+    blob: await response.blob(),
+    filename: filenameMatch?.[1] ?? `${templateId}.vscode-handoff.zip`,
+  };
+}
+
+
 export function planProject(
   templateId: string,
   workspaceId?: string,
