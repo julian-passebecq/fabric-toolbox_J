@@ -33,7 +33,9 @@
     "command": "New-FabricWorkspace",
     "source_path": "tools/MicrosoftFabricMgmt/source/Public/Workspace/New-FabricWorkspace.ps1",
     "verification_capability_id": "ps-workspace-get-fabricworkspace",
-    "verification_parameter_map": {"WorkspaceName": "WorkspaceName"},
+    "verification_parameter_map": {
+      "WorkspaceName": "WorkspaceName"
+    },
     "description": "Create a Fabric workspace through the upstream cmdlet. Studio requires an expiring mutation plan, upstream -WhatIf validation and explicit typed approval before execution."
   },
   {
@@ -45,11 +47,16 @@
     "risk": "write",
     "execution_policy": "guarded-write",
     "supports_whatif": true,
-    "required_any_of": ["WorkspaceName", "WorkspaceDescription"],
+    "required_any_of": [
+      "WorkspaceName",
+      "WorkspaceDescription"
+    ],
     "command": "Update-FabricWorkspace",
     "source_path": "tools/MicrosoftFabricMgmt/source/Public/Workspace/Update-FabricWorkspace.ps1",
     "verification_capability_id": "ps-workspace-get-fabricworkspace",
-    "verification_parameter_map": {"WorkspaceId": "WorkspaceId"},
+    "verification_parameter_map": {
+      "WorkspaceId": "WorkspaceId"
+    },
     "description": "Update workspace name and/or description through the upstream cmdlet. Studio requires an expiring mutation plan, upstream -WhatIf validation and explicit typed approval before execution."
   },
   {
@@ -82,11 +89,36 @@
     "source": "Microsoft Fabric REST API",
     "risk": "read",
     "endpoint": "GET /v1/workspaces/{workspaceId}/items",
-    "parameters": ["workspaceId", "type", "rootFolderId"],
+    "parameters": [
+      "workspaceId",
+      "type",
+      "rootFolderId"
+    ],
     "parameter_specs": [
-      {"name": "workspaceId", "type": "string", "mandatory": true, "is_switch": false, "description": "Fabric workspace ID.", "allowed_values": []},
-      {"name": "type", "type": "string", "mandatory": false, "is_switch": false, "description": "Optional Fabric item type filter.", "allowed_values": []},
-      {"name": "rootFolderId", "type": "string", "mandatory": false, "is_switch": false, "description": "Optional root folder ID.", "allowed_values": []}
+      {
+        "name": "workspaceId",
+        "type": "string",
+        "mandatory": true,
+        "is_switch": false,
+        "description": "Fabric workspace ID.",
+        "allowed_values": []
+      },
+      {
+        "name": "type",
+        "type": "string",
+        "mandatory": false,
+        "is_switch": false,
+        "description": "Optional Fabric item type filter.",
+        "allowed_values": []
+      },
+      {
+        "name": "rootFolderId",
+        "type": "string",
+        "mandatory": false,
+        "is_switch": false,
+        "description": "Optional root folder ID.",
+        "allowed_values": []
+      }
     ],
     "description": "List items in a workspace using the official Fabric v1 Items API. Execution reuses MicrosoftFabricMgmt Invoke-FabricAPIRequest."
   },
@@ -98,11 +130,36 @@
     "source": "Microsoft Fabric REST API",
     "risk": "read",
     "endpoint": "GET /v1/workspaces/{workspaceId}/items/{itemId}",
-    "parameters": ["workspaceId", "itemId", "include"],
+    "parameters": [
+      "workspaceId",
+      "itemId",
+      "include"
+    ],
     "parameter_specs": [
-      {"name": "workspaceId", "type": "string", "mandatory": true, "is_switch": false, "description": "Fabric workspace ID.", "allowed_values": []},
-      {"name": "itemId", "type": "string", "mandatory": true, "is_switch": false, "description": "Fabric item ID.", "allowed_values": []},
-      {"name": "include", "type": "string", "mandatory": false, "is_switch": false, "description": "Optional item properties to include, for example DefaultIdentity.", "allowed_values": []}
+      {
+        "name": "workspaceId",
+        "type": "string",
+        "mandatory": true,
+        "is_switch": false,
+        "description": "Fabric workspace ID.",
+        "allowed_values": []
+      },
+      {
+        "name": "itemId",
+        "type": "string",
+        "mandatory": true,
+        "is_switch": false,
+        "description": "Fabric item ID.",
+        "allowed_values": []
+      },
+      {
+        "name": "include",
+        "type": "string",
+        "mandatory": false,
+        "is_switch": false,
+        "description": "Optional item properties to include, for example DefaultIdentity.",
+        "allowed_values": []
+      }
     ],
     "description": "Retrieve generic item properties from the official Fabric Items API."
   },
@@ -114,10 +171,27 @@
     "source": "Microsoft Fabric REST API",
     "risk": "read",
     "endpoint": "GET /v1/workspaces/{workspaceId}/items/{itemId}/connections",
-    "parameters": ["workspaceId", "itemId"],
+    "parameters": [
+      "workspaceId",
+      "itemId"
+    ],
     "parameter_specs": [
-      {"name": "workspaceId", "type": "string", "mandatory": true, "is_switch": false, "description": "Fabric workspace ID.", "allowed_values": []},
-      {"name": "itemId", "type": "string", "mandatory": true, "is_switch": false, "description": "Fabric item ID.", "allowed_values": []}
+      {
+        "name": "workspaceId",
+        "type": "string",
+        "mandatory": true,
+        "is_switch": false,
+        "description": "Fabric workspace ID.",
+        "allowed_values": []
+      },
+      {
+        "name": "itemId",
+        "type": "string",
+        "mandatory": true,
+        "is_switch": false,
+        "description": "Fabric item ID.",
+        "allowed_values": []
+      }
     ],
     "description": "List connections used by a Fabric item through the official Items API. Pagination is handled by the upstream API helper."
   },
@@ -129,11 +203,36 @@
     "source": "Microsoft Fabric REST API",
     "risk": "read",
     "endpoint": "GET /v1/workspaces/{workspaceId}/items/{itemId}/jobs/instances",
-    "parameters": ["workspaceId", "itemId", "continuationToken"],
+    "parameters": [
+      "workspaceId",
+      "itemId",
+      "continuationToken"
+    ],
     "parameter_specs": [
-      {"name": "workspaceId", "type": "string", "mandatory": true, "is_switch": false, "description": "Fabric workspace ID.", "allowed_values": []},
-      {"name": "itemId", "type": "string", "mandatory": true, "is_switch": false, "description": "Fabric item ID.", "allowed_values": []},
-      {"name": "continuationToken", "type": "string", "mandatory": false, "is_switch": false, "description": "Optional continuation token for another result page.", "allowed_values": []}
+      {
+        "name": "workspaceId",
+        "type": "string",
+        "mandatory": true,
+        "is_switch": false,
+        "description": "Fabric workspace ID.",
+        "allowed_values": []
+      },
+      {
+        "name": "itemId",
+        "type": "string",
+        "mandatory": true,
+        "is_switch": false,
+        "description": "Fabric item ID.",
+        "allowed_values": []
+      },
+      {
+        "name": "continuationToken",
+        "type": "string",
+        "mandatory": false,
+        "is_switch": false,
+        "description": "Optional continuation token for another result page.",
+        "allowed_values": []
+      }
     ],
     "description": "List recent and active job instances for a Fabric item using the official Job Scheduler API."
   },
@@ -145,12 +244,45 @@
     "source": "Microsoft Fabric REST API",
     "risk": "read",
     "endpoint": "GET /v1/workspaces/{workspaceId}/items/{itemId}/jobs/{jobType}/schedules",
-    "parameters": ["workspaceId", "itemId", "jobType", "continuationToken"],
+    "parameters": [
+      "workspaceId",
+      "itemId",
+      "jobType",
+      "continuationToken"
+    ],
     "parameter_specs": [
-      {"name": "workspaceId", "type": "string", "mandatory": true, "is_switch": false, "description": "Fabric workspace ID.", "allowed_values": []},
-      {"name": "itemId", "type": "string", "mandatory": true, "is_switch": false, "description": "Fabric item ID.", "allowed_values": []},
-      {"name": "jobType", "type": "string", "mandatory": true, "is_switch": false, "description": "Job type exposed by the Fabric item.", "allowed_values": []},
-      {"name": "continuationToken", "type": "string", "mandatory": false, "is_switch": false, "description": "Optional continuation token for another result page.", "allowed_values": []}
+      {
+        "name": "workspaceId",
+        "type": "string",
+        "mandatory": true,
+        "is_switch": false,
+        "description": "Fabric workspace ID.",
+        "allowed_values": []
+      },
+      {
+        "name": "itemId",
+        "type": "string",
+        "mandatory": true,
+        "is_switch": false,
+        "description": "Fabric item ID.",
+        "allowed_values": []
+      },
+      {
+        "name": "jobType",
+        "type": "string",
+        "mandatory": true,
+        "is_switch": false,
+        "description": "Job type exposed by the Fabric item.",
+        "allowed_values": []
+      },
+      {
+        "name": "continuationToken",
+        "type": "string",
+        "mandatory": false,
+        "is_switch": false,
+        "description": "Optional continuation token for another result page.",
+        "allowed_values": []
+      }
     ],
     "description": "List schedules for a Fabric item/job type using the official Job Scheduler API."
   },
@@ -163,9 +295,18 @@
     "risk": "read",
     "response_mode": "fabric-lro",
     "endpoint": "GET /v1/workspaces/{workspaceId}/git/status",
-    "parameters": ["workspaceId"],
+    "parameters": [
+      "workspaceId"
+    ],
     "parameter_specs": [
-      {"name": "workspaceId", "type": "string", "mandatory": true, "is_switch": false, "description": "Fabric workspace ID connected to Git.", "allowed_values": []}
+      {
+        "name": "workspaceId",
+        "type": "string",
+        "mandatory": true,
+        "is_switch": false,
+        "description": "Fabric workspace ID connected to Git.",
+        "allowed_values": []
+      }
     ],
     "description": "Get workspace Git differences. This endpoint can return 202, so execution delegates LRO polling and result retrieval to MicrosoftFabricMgmt."
   },
@@ -330,6 +471,47 @@
       "DataPipelineName": "DataPipelineName"
     },
     "description": "Create a Fabric Data Pipeline through the upstream MicrosoftFabricMgmt cmdlet with guarded execution and read-back verification."
+  },
+  {
+    "id": "rest-eventstream-definition-get",
+    "title": "Get Eventstream definition",
+    "category": "Eventstream",
+    "provider": "Fabric REST API",
+    "source": "Microsoft Fabric REST API",
+    "risk": "read",
+    "endpoint": "POST /v1/workspaces/{workspaceId}/eventstreams/{eventstreamId}/getDefinition",
+    "parameters": [
+      "workspaceId",
+      "eventstreamId",
+      "format"
+    ],
+    "parameter_specs": [
+      {
+        "name": "workspaceId",
+        "type": "string",
+        "mandatory": true,
+        "is_switch": false,
+        "description": "Fabric workspace ID.",
+        "allowed_values": []
+      },
+      {
+        "name": "eventstreamId",
+        "type": "string",
+        "mandatory": true,
+        "is_switch": false,
+        "description": "Fabric Eventstream item ID.",
+        "allowed_values": []
+      },
+      {
+        "name": "format",
+        "type": "string",
+        "mandatory": false,
+        "is_switch": false,
+        "description": "Optional Eventstream public definition format.",
+        "allowed_values": []
+      }
+    ],
+    "description": "Retrieve the current Eventstream topology definition through the official Fabric getDefinition API. This is a registered bodyless POST read."
   },
   {
     "id": "rest-sqldatabase-create",
