@@ -387,7 +387,7 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
               <Badge appearance={acceptance.accepted ? 'tint' : 'filled'}>
                 {acceptance.status.toUpperCase()}
               </Badge>
-              {acceptance.definition_match !== undefined && (
+              {acceptance.definition_match !== undefined && acceptance.definition_match !== null && (
                 <Badge appearance={acceptance.definition_match ? 'tint' : 'filled'}>
                   EVENTSTREAM {acceptance.definition_match ? 'MATCH' : 'DRIFT'}
                 </Badge>
