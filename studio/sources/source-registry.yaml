@@ -41,7 +41,14 @@ sources:
     guarded_write_scope:
       - New-FabricWorkspace
       - Update-FabricWorkspace
-    guarded_write_note: Only these explicitly curated cmdlets are executable as writes in Studio v0.8. Both support upstream ShouldProcess/-WhatIf. Other discovered write/admin/destructive commands remain blocked.
+      - New-FabricEventhouse
+      - New-FabricEventstream
+      - New-FabricKQLQueryset
+      - New-FabricLakehouse
+      - New-FabricNotebook
+      - New-FabricEnvironment
+      - New-FabricDataPipeline
+    guarded_write_note: These explicitly curated cmdlets are executable as guarded writes in Studio v0.9. Each create supports upstream ShouldProcess/-WhatIf and has a registered name-based read-back capability. KQL Database, KQL Dashboard and all other discovered write/admin/destructive commands remain blocked until their dependency or API semantics are reviewed.
     studio_modifies_upstream: false
 
   - id: microsoftfabricmgmt-session-runtime
