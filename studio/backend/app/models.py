@@ -50,6 +50,17 @@ ProjectAction = Literal["create", "unchanged", "conflict", "unmanaged"]
 DefinitionStrategy = Literal["empty", "definition", "configure-after-create"]
 
 
+class ProjectParameter(BaseModel):
+    name: str
+    label: str
+    description: str = ""
+    type: str = "string"
+    required: bool = False
+    secret: bool = False
+    default: Any | None = None
+    allowed_values: list[str] = Field(default_factory=list)
+
+
 class ProjectItem(BaseModel):
     id: str
     type: str
@@ -59,6 +70,7 @@ class ProjectItem(BaseModel):
     depends_on: list[str] = Field(default_factory=list)
     definition_strategy: DefinitionStrategy = "empty"
     vscode_handoff: bool = False
+    settings: dict[str, Any] = Field(default_factory=dict)
 
 
 class ProjectTemplate(BaseModel):
@@ -69,12 +81,14 @@ class ProjectTemplate(BaseModel):
     workspace_name: str
     workspace_description: str = ""
     tags: list[str] = Field(default_factory=list)
+    parameters: list[ProjectParameter] = Field(default_factory=list)
     items: list[ProjectItem] = Field(default_factory=list)
 
 
 class ProjectPlanRequest(BaseModel):
     workspace_id: str | None = None
     current_items: list[dict[str, Any]] | None = None
+    parameters: dict[str, Any] = Field(default_factory=dict)
 
 
 class ProjectPlanAction(BaseModel):
@@ -97,6 +111,8 @@ class ProjectPlan(BaseModel):
     live_inventory: bool = False
     actions: list[ProjectPlanAction] = Field(default_factory=list)
     counts: dict[str, int] = Field(default_factory=dict)
+    resolved_parameters: dict[str, Any] = Field(default_factory=dict)
+    missing_parameters: list[str] = Field(default_factory=list)
     apply_supported: bool = False
     apply_note: str = ""
 
