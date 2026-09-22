@@ -19,7 +19,7 @@ def _normalise_query_value(value: Any) -> str:
     return str(value)
 
 
-def build_rest_get_command(capability: Capability, parameters: dict[str, Any] | None = None) -> str:
+def build_rest_read_command(capability: Capability, parameters: dict[str, Any] | None = None) -> str:
     if capability.provider != "Fabric REST API":
         raise UnsafeOperation("Capability is not provided by the Fabric REST API")
     if capability.risk != "read":
@@ -32,8 +32,10 @@ def build_rest_get_command(capability: Capability, parameters: dict[str, Any] | 
         raise UnsafeOperation("REST endpoint declaration is invalid")
 
     method = endpoint_match.group("method")
-    if method != "GET":
-        raise UnsafeOperation(f"Only GET is enabled for REST capabilities; method={method}")
+    if method not in {"GET", "POST"}:
+        raise UnsafeOperation(
+            f"Only registered GET and bodyless POST reads are enabled; method={method}"
+        )
 
     if capability.response_mode not in {"sync", "fabric-lro"}:
         raise UnsafeOperation(f"Unsupported REST response mode: {capability.response_mode}")
@@ -71,11 +73,16 @@ def build_rest_get_command(capability: Capability, parameters: dict[str, Any] | 
     lro_switch = " -WaitForCompletion" if capability.response_mode == "fabric-lro" else ""
     command = (
         f"$headers = Get-FabricAPIHeaders; "
-        f"$result = Invoke-FabricAPIRequest -BaseURI {url_literal} -Headers $headers -Method 'Get'{lro_switch}; "
+        f"$result = Invoke-FabricAPIRequest -BaseURI {url_literal} -Headers $headers -Method '{method.title()}'{lro_switch}; "
         "$result | ConvertTo-Json -Depth 20 -Compress"
     )
     return command
 
 
+def build_rest_get_command(capability: Capability, parameters: dict[str, Any] | None = None) -> str:
+    """Backward-compatible alias retained for existing callers and tests."""
+    return build_rest_read_command(capability, parameters)
+
+
 def execute_rest_read(capability: Capability, parameters: dict[str, Any] | None = None) -> dict[str, Any]:
-    return runtime.run_json(build_rest_get_command(capability, parameters))
+    return runtime.run_json(build_rest_read_command(capability, parameters))
