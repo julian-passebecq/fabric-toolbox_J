@@ -125,6 +125,31 @@ class ProjectPlan(BaseModel):
     apply_note: str = ""
 
 
+AcceptanceStatus = Literal["pass", "fail", "warning"]
+
+
+class ProjectAcceptanceCheck(BaseModel):
+    id: str
+    label: str
+    status: AcceptanceStatus
+    detail: str
+    item_id: str | None = None
+    expected: str | None = None
+    actual: str | None = None
+
+
+class ProjectAcceptanceReport(BaseModel):
+    template_id: str
+    project_name: str
+    workspace_id: str
+    status: Literal["pass", "fail"]
+    accepted: bool
+    checks: list[ProjectAcceptanceCheck] = Field(default_factory=list)
+    desired_eventstream_sha256: str | None = None
+    live_eventstream_sha256: str | None = None
+    definition_match: bool | None = None
+
+
 class PreviewRequest(BaseModel):
     parameters: dict[str, Any] = Field(default_factory=dict)
 
