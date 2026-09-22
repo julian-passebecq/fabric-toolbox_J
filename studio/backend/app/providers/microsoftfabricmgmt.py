@@ -41,6 +41,13 @@ def _ps_literal(value: Any) -> str:
         return "'" + value.replace("'", "''") + "'"
     if isinstance(value, list):
         return "@(" + ", ".join(_ps_literal(item) for item in value) + ")"
+    if isinstance(value, dict):
+        entries: list[str] = []
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise ValueError("PowerShell hashtable keys must be strings")
+            entries.append(f"{_ps_literal(key)} = {_ps_literal(item)}")
+        return "@{" + "; ".join(entries) + "}"
     raise ValueError(f"Unsupported PowerShell parameter type: {type(value).__name__}")
 
 
