@@ -46,6 +46,7 @@ type WorkspaceContext = { id: string; name: string };
 const nav = [
   ['Overview', AppsList24Regular],
   ['Project Composer', BuildingFactory24Regular],
+  ['Provisioning', CloudDatabaseRegular],
   ['Workspaces', BuildingFactory24Regular],
   ['Change Plans', Shield24Regular],
   ['Items', CloudDatabaseRegular],
@@ -184,6 +185,16 @@ export function App() {
     'Get-FabricDeploymentPipelineOperation',
     'Get-FabricWorkspaceGitConnection',
   ].includes(item.command ?? ''));
+  const provisioningCommands = new Set([
+    'New-FabricEventhouse',
+    'New-FabricEventstream',
+    'New-FabricKQLQueryset',
+    'New-FabricLakehouse',
+    'New-FabricNotebook',
+    'New-FabricEnvironment',
+    'New-FabricDataPipeline',
+  ]);
+  const provisioningCapabilities = catalog.filter((item) => provisioningCommands.has(item.command ?? '') && isGuardedWrite(item));
 
   async function copyCommand(cap: Capability) {
     const value = cap.command ?? cap.endpoint;
@@ -286,6 +297,7 @@ export function App() {
         </div>
         <div className={styles.cards}>
           <Card><CardHeader header={<Subtitle1>Project Composer</Subtitle1>} description="Plan a declarative Fabric architecture, diff it against a live workspace and prepare VS Code authoring handoff." /><Button onClick={() => setSection('Project Composer')}>Compose project</Button></Card>
+          <Card><CardHeader header={<Subtitle1>Guarded provisioning</Subtitle1>} description="Create selected Fabric items through reviewed upstream MicrosoftFabricMgmt cmdlets with WhatIf, typed approval and read-back verification." /><Button onClick={() => setSection('Provisioning')}>Open provisioning</Button></Card>
           <Card><CardHeader header={<Subtitle1>Workspace inventory & changes</Subtitle1>} description="Inventory workspaces and use guarded plans for the explicitly allowlisted create/update operations." /><Button onClick={() => setSection('Workspaces')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Change Plans</Subtitle1>} description="Review tenant-bound, expiring, single-use mutation plans created in the current backend session." /><Button onClick={() => setSection('Change Plans')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Item explorer</Subtitle1>} description="Select an item once and inherit its workspace/item IDs across detail, connection, job and schedule operations." /><Button onClick={() => setSection('Items')}>Open</Button></Card>
@@ -305,6 +317,17 @@ export function App() {
 
   function renderSection() {
     if (section === 'Project Composer') return <ProjectComposerPage connected={connected} workspaceContext={workspaceContext} />;
+    if (section === 'Provisioning') {
+      return (
+        <OperationsPage
+          title="Guarded provisioning"
+          description="Reviewed Fabric item creation through upstream MicrosoftFabricMgmt cmdlets. Every create requires a tenant-bound plan, upstream -WhatIf, exact typed approval and name-based read-back verification. KQL Database and KQL Dashboard remain gated pending dependency-aware Composer apply."
+          capabilities={provisioningCapabilities}
+          connected={connected}
+          defaultParameters={workspaceDefaults}
+        />
+      );
+    }
     if (section === 'Workspaces') {
       return (
         <>

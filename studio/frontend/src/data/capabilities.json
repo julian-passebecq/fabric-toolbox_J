@@ -170,6 +170,132 @@
     "description": "Get workspace Git differences. This endpoint can return 202, so execution delegates LRO polling and result retrieval to MicrosoftFabricMgmt."
   },
   {
+    "id": "ps-eventhouse-new-fabriceventhouse",
+    "title": "Create Eventhouse",
+    "category": "Eventhouse",
+    "provider": "MicrosoftFabricMgmt",
+    "source": "microsoft/fabric-toolbox",
+    "risk": "write",
+    "execution_policy": "guarded-write",
+    "supports_whatif": true,
+    "command": "New-FabricEventhouse",
+    "source_path": "tools/MicrosoftFabricMgmt/source/Public/Eventhouse/New-FabricEventhouse.ps1",
+    "verification_capability_id": "ps-eventhouse-get-fabriceventhouse",
+    "verification_parameter_map": {
+      "WorkspaceId": "WorkspaceId",
+      "EventhouseName": "EventhouseName"
+    },
+    "description": "Create an Eventhouse through the upstream MicrosoftFabricMgmt cmdlet with Studio mutation planning, upstream -WhatIf validation, typed approval and name-based read-back verification."
+  },
+  {
+    "id": "ps-eventstream-new-fabriceventstream",
+    "title": "Create Eventstream",
+    "category": "Eventstream",
+    "provider": "MicrosoftFabricMgmt",
+    "source": "microsoft/fabric-toolbox",
+    "risk": "write",
+    "execution_policy": "guarded-write",
+    "supports_whatif": true,
+    "command": "New-FabricEventstream",
+    "source_path": "tools/MicrosoftFabricMgmt/source/Public/Eventstream/New-FabricEventstream.ps1",
+    "verification_capability_id": "ps-eventstream-get-fabriceventstream",
+    "verification_parameter_map": {
+      "WorkspaceId": "WorkspaceId",
+      "EventstreamName": "EventstreamName"
+    },
+    "description": "Create an Eventstream through the upstream MicrosoftFabricMgmt cmdlet. Optional definition paths remain explicit operator inputs."
+  },
+  {
+    "id": "ps-kql-queryset-new-fabrickqlqueryset",
+    "title": "Create KQL Queryset",
+    "category": "KQL Queryset",
+    "provider": "MicrosoftFabricMgmt",
+    "source": "microsoft/fabric-toolbox",
+    "risk": "write",
+    "execution_policy": "guarded-write",
+    "supports_whatif": true,
+    "command": "New-FabricKQLQueryset",
+    "source_path": "tools/MicrosoftFabricMgmt/source/Public/KQL Queryset/New-FabricKQLQueryset.ps1",
+    "verification_capability_id": "ps-kql-queryset-get-fabrickqlqueryset",
+    "verification_parameter_map": {
+      "WorkspaceId": "WorkspaceId",
+      "KQLQuerysetName": "KQLQuerysetName"
+    },
+    "description": "Create a KQL Queryset through the upstream MicrosoftFabricMgmt cmdlet with guarded execution and read-back verification."
+  },
+  {
+    "id": "ps-lakehouse-new-fabriclakehouse",
+    "title": "Create Lakehouse",
+    "category": "Lakehouse",
+    "provider": "MicrosoftFabricMgmt",
+    "source": "microsoft/fabric-toolbox",
+    "risk": "write",
+    "execution_policy": "guarded-write",
+    "supports_whatif": true,
+    "command": "New-FabricLakehouse",
+    "source_path": "tools/MicrosoftFabricMgmt/source/Public/Lakehouse/New-FabricLakehouse.ps1",
+    "verification_capability_id": "ps-lakehouse-get-fabriclakehouse",
+    "verification_parameter_map": {
+      "WorkspaceId": "WorkspaceId",
+      "LakehouseName": "LakehouseName"
+    },
+    "description": "Create a Lakehouse through the upstream MicrosoftFabricMgmt cmdlet, including correct Boolean rendering for optional schema enablement."
+  },
+  {
+    "id": "ps-notebook-new-fabricnotebook",
+    "title": "Create Notebook",
+    "category": "Notebook",
+    "provider": "MicrosoftFabricMgmt",
+    "source": "microsoft/fabric-toolbox",
+    "risk": "write",
+    "execution_policy": "guarded-write",
+    "supports_whatif": true,
+    "command": "New-FabricNotebook",
+    "source_path": "tools/MicrosoftFabricMgmt/source/Public/Notebook/New-FabricNotebook.ps1",
+    "verification_capability_id": "ps-notebook-get-fabricnotebook",
+    "verification_parameter_map": {
+      "WorkspaceId": "WorkspaceId",
+      "NotebookName": "NotebookName"
+    },
+    "description": "Create a Fabric Notebook through the upstream cmdlet. Definition paths and notebook format stay explicit and auditable."
+  },
+  {
+    "id": "ps-environment-new-fabricenvironment",
+    "title": "Create Environment",
+    "category": "Environment",
+    "provider": "MicrosoftFabricMgmt",
+    "source": "microsoft/fabric-toolbox",
+    "risk": "write",
+    "execution_policy": "guarded-write",
+    "supports_whatif": true,
+    "command": "New-FabricEnvironment",
+    "source_path": "tools/MicrosoftFabricMgmt/source/Public/Environment/New-FabricEnvironment.ps1",
+    "verification_capability_id": "ps-environment-get-fabricenvironment",
+    "verification_parameter_map": {
+      "WorkspaceId": "WorkspaceId",
+      "EnvironmentName": "EnvironmentName"
+    },
+    "description": "Create a Fabric Environment through the upstream MicrosoftFabricMgmt cmdlet with guarded execution and read-back verification."
+  },
+  {
+    "id": "ps-data-pipeline-new-fabricdatapipeline",
+    "title": "Create Data Pipeline",
+    "category": "Data Pipeline",
+    "provider": "MicrosoftFabricMgmt",
+    "source": "microsoft/fabric-toolbox",
+    "risk": "write",
+    "execution_policy": "guarded-write",
+    "supports_whatif": true,
+    "command": "New-FabricDataPipeline",
+    "source_path": "tools/MicrosoftFabricMgmt/source/Public/Data Pipeline/New-FabricDataPipeline.ps1",
+    "verification_capability_id": "ps-data-pipeline-get-fabricdatapipeline",
+    "verification_parameter_map": {
+      "WorkspaceId": "WorkspaceId",
+      "DataPipelineName": "DataPipelineName"
+    },
+    "description": "Create a Fabric Data Pipeline through the upstream MicrosoftFabricMgmt cmdlet with guarded execution and read-back verification."
+  },
+  {
     "id": "rest-sqldatabase-create",
     "title": "Create SQL database",
     "category": "SQL Database",

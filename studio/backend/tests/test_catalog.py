@@ -28,6 +28,28 @@ def test_discovers_workspace_command():
     assert specs["Raw"].type.lower() == "switch"
 
 
+
+def test_parameter_discovery_handles_brackets_inside_validate_pattern():
+    capabilities = discover_powershell_capabilities()
+    by_command = {item.command: item for item in capabilities if item.command}
+
+    eventhouse = by_command["New-FabricEventhouse"]
+    lakehouse = by_command["New-FabricLakehouse"]
+    notebook = by_command["New-FabricNotebook"]
+
+    eventhouse_specs = {spec.name: spec for spec in eventhouse.parameter_specs}
+    assert eventhouse_specs["WorkspaceId"].mandatory is True
+    assert eventhouse_specs["EventhouseName"].mandatory is True
+    assert "EventhouseName" in eventhouse.parameters
+
+    lakehouse_specs = {spec.name: spec for spec in lakehouse.parameter_specs}
+    assert lakehouse_specs["LakehouseName"].mandatory is True
+    assert lakehouse_specs["LakehouseEnableSchemas"].type.lower() == "bool"
+
+    notebook_specs = {spec.name: spec for spec in notebook.parameter_specs}
+    assert notebook_specs["NotebookName"].mandatory is True
+    assert notebook_specs["NotebookFormat"].allowed_values == ["ipynb", "fabricGitSource"]
+
 def test_classifies_remove_as_destructive_and_blocks_it():
     capabilities = discover_powershell_capabilities()
     remove_workspace = next(item for item in capabilities if item.command == "Remove-FabricWorkspace")
@@ -198,3 +220,103 @@ def test_rest_blocks_registered_write_endpoint():
     create_db = next(item for item in combined_catalog() if item.id == "rest-sqldatabase-create")
     with pytest.raises(UnsafeOperation):
         build_rest_get_command(create_db, {"workspaceId": "ws"})
+
+
+
+def test_selected_fabric_item_creates_are_explicit_guarded_writes():
+    catalog = combined_catalog()
+    expected = {
+        "New-FabricEventhouse": ("Get-FabricEventhouse", {"WorkspaceId": "WorkspaceId", "EventhouseName": "EventhouseName"}),
+        "New-FabricEventstream": ("Get-FabricEventstream", {"WorkspaceId": "WorkspaceId", "EventstreamName": "EventstreamName"}),
+        "New-FabricKQLQueryset": ("Get-FabricKQLQueryset", {"WorkspaceId": "WorkspaceId", "KQLQuerysetName": "KQLQuerysetName"}),
+        "New-FabricLakehouse": ("Get-FabricLakehouse", {"WorkspaceId": "WorkspaceId", "LakehouseName": "LakehouseName"}),
+        "New-FabricNotebook": ("Get-FabricNotebook", {"WorkspaceId": "WorkspaceId", "NotebookName": "NotebookName"}),
+        "New-FabricEnvironment": ("Get-FabricEnvironment", {"WorkspaceId": "WorkspaceId", "EnvironmentName": "EnvironmentName"}),
+        "New-FabricDataPipeline": ("Get-FabricDataPipeline", {"WorkspaceId": "WorkspaceId", "DataPipelineName": "DataPipelineName"}),
+    }
+
+    by_command = {item.command: item for item in catalog if item.command}
+    by_id = {item.id: item for item in catalog}
+    for create_command, (read_command, mapping) in expected.items():
+        capability = by_command[create_command]
+        assert capability.risk == "write"
+        assert capability.execution_policy == "guarded-write"
+        assert capability.supports_whatif is True
+        assert capability.verification_parameter_map == mapping
+        verification = by_id[capability.verification_capability_id]
+        assert verification.command == read_command
+        assert verification.risk == "read"
+        assert verification.execution_policy == "read"
+
+
+def test_guarded_create_requires_upstream_mandatory_parameters():
+    create_eventhouse = next(item for item in combined_catalog() if item.command == "New-FabricEventhouse")
+
+    with pytest.raises(ValueError, match="EventhouseName"):
+        build_guarded_write_command(create_eventhouse, {"WorkspaceId": "ws-1"})
+
+    with pytest.raises(ValueError, match="WorkspaceId"):
+        build_guarded_write_command(create_eventhouse, {"EventhouseName": "foilo_rti"})
+
+
+def test_guarded_eventhouse_create_renders_whatif_and_readback_inputs():
+    create_eventhouse = next(item for item in combined_catalog() if item.command == "New-FabricEventhouse")
+    command = build_guarded_write_command(
+        create_eventhouse,
+        {"WorkspaceId": "ws-1", "EventhouseName": "foilo_rti"},
+        what_if=True,
+    )
+
+    assert "& 'New-FabricEventhouse'" in command
+    assert "-WorkspaceId 'ws-1'" in command
+    assert "-EventhouseName 'foilo_rti'" in command
+    assert "-WhatIf" in command
+
+
+def test_non_switch_boolean_parameter_renders_explicit_boolean_value():
+    create_lakehouse = next(item for item in combined_catalog() if item.command == "New-FabricLakehouse")
+    specs = {spec.name: spec for spec in create_lakehouse.parameter_specs}
+    assert specs["LakehouseEnableSchemas"].type.lower() == "bool"
+    assert specs["LakehouseEnableSchemas"].is_switch is False
+
+    enabled = build_guarded_write_command(
+        create_lakehouse,
+        {
+            "WorkspaceId": "ws-1",
+            "LakehouseName": "foilo_lakehouse",
+            "LakehouseEnableSchemas": True,
+        },
+    )
+    disabled = build_guarded_write_command(
+        create_lakehouse,
+        {
+            "WorkspaceId": "ws-1",
+            "LakehouseName": "foilo_lakehouse",
+            "LakehouseEnableSchemas": False,
+        },
+    )
+
+    assert "-LakehouseEnableSchemas $true" in enabled
+    assert "-LakehouseEnableSchemas $false" in disabled
+
+
+def test_switch_false_is_omitted_but_switch_true_is_rendered():
+    workspace = next(item for item in discover_powershell_capabilities() if item.command == "Get-FabricWorkspace")
+    enabled = build_read_command(workspace, {"Raw": True})
+    disabled = build_read_command(workspace, {"Raw": False})
+    assert "-Raw" in enabled
+    assert "-Raw" not in disabled
+
+
+def test_validate_set_values_are_enforced_before_powershell_execution():
+    create_notebook = next(item for item in combined_catalog() if item.command == "New-FabricNotebook")
+
+    with pytest.raises(ValueError, match="allowed values"):
+        build_guarded_write_command(
+            create_notebook,
+            {
+                "WorkspaceId": "ws-1",
+                "NotebookName": "bronze_ingestion",
+                "NotebookFormat": "unsupported",
+            },
+        )

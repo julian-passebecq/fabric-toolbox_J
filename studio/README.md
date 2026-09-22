@@ -60,12 +60,21 @@ Additional controls:
 
 ### Currently allowlisted writes
 
-Only these writes are executable through the guarded-write broker:
+These writes are executable through the guarded-write broker:
 
 - create workspace via upstream `New-FabricWorkspace`
 - update workspace name/description via upstream `Update-FabricWorkspace`
+- create Eventhouse via `New-FabricEventhouse`
+- create Eventstream via `New-FabricEventstream`
+- create KQL Queryset via `New-FabricKQLQueryset`
+- create Lakehouse via `New-FabricLakehouse`
+- create Notebook via `New-FabricNotebook`
+- create Environment via `New-FabricEnvironment`
+- create Data Pipeline via `New-FabricDataPipeline`
 
-Role changes, capacity assignment, item lifecycle writes, job cancellation/retry, schedule writes, Git writes and destructive operations remain blocked until their semantics, validation path, verification strategy and blast radius have been reviewed.
+Every item create uses upstream `SupportsShouldProcess` / `-WhatIf`, an expiring tenant-bound Studio plan, exact typed approval, and a name-based read-back through the matching upstream `Get-Fabric*` cmdlet.
+
+KQL Database remains gated until Composer resolves its required parent Eventhouse ID in dependency order. KQL Dashboard remains gated because the current upstream management module has read coverage but no matching create cmdlet. Role changes, capacity assignment, other item lifecycle writes, job cancellation/retry, schedule writes, Git writes and destructive operations remain blocked until reviewed.
 
 ## Primary execution hierarchy
 
@@ -139,6 +148,7 @@ The launcher starts the API and UI in separate PowerShell 7 windows, then opens 
 
 - Overview
 - Project Composer
+- Provisioning
 - Workspaces
 - Change Plans
 - Items

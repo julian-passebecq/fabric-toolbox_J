@@ -1,5 +1,17 @@
 # Studio changelog
 
+## 0.9.0
+
+- Added a dedicated Guarded Provisioning surface for selected Fabric item creation.
+- Explicitly allowlisted upstream MicrosoftFabricMgmt create cmdlets for Eventhouse, Eventstream, KQL Queryset, Lakehouse, Notebook, Environment and Data Pipeline.
+- Preserved the existing tenant-bound, expiring, single-use mutation plan and typed-approval model for every new create.
+- Required upstream SupportsShouldProcess / -WhatIf validation and registered name-based read-back verification for every newly enabled item type.
+- Fixed PowerShell parameter rendering so Boolean value parameters such as LakehouseEnableSchemas render as $true/$false while switch parameters retain switch semantics.
+- Added fail-fast validation for upstream mandatory parameters and ValidateSet values before PowerShell execution.
+- Kept KQL Database gated until Project Composer can resolve the parent Eventhouse item ID in dependency order.
+- Kept KQL Dashboard gated because the current upstream MicrosoftFabricMgmt module exposes read coverage but not a matching create cmdlet.
+
+
 ## 0.8.0
 
 - Added the first Project Composer milestone for declarative Fabric project architecture.

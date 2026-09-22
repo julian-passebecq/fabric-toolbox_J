@@ -112,9 +112,12 @@ Specialized tools keep their own authentication, dependency and output lifecycle
 - [x] preserve unmanaged items by default
 - [x] VS Code authoring handoff metadata
 - [x] Project Composer API and Fluent UI page
-- [ ] register guarded create operations for Eventhouse, KQL Database, KQL Queryset and KQL Dashboard
+- [x] register guarded create operations for Eventhouse, Eventstream and KQL Queryset
+- [x] register guarded create operations for Lakehouse, Environment, Notebook and Data Pipeline
+- [ ] register dependency-aware KQL Database creation after resolving parent Eventhouse ID
+- [ ] register KQL Dashboard create through reviewed official REST coverage
 - [ ] register Eventstream definition create/update flow
-- [ ] register Lakehouse, Environment, Notebook and Data Pipeline create/update flows
+- [ ] register definition update flows for Notebook and Data Pipeline
 - [ ] dependency-aware apply ordering and read-back verification
 - [ ] project manifest export/import
 - [ ] VS Code Fabric extension deep-link or workspace-folder handoff where supported
