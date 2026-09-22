@@ -37,6 +37,7 @@ const ActivityPage = lazy(() => import('./pages/ActivityPage').then((module) => 
 const ChangePlansPage = lazy(() => import('./pages/ChangePlansPage').then((module) => ({ default: module.ChangePlansPage })));
 const DiagnosticsPage = lazy(() => import('./pages/DiagnosticsPage').then((module) => ({ default: module.DiagnosticsPage })));
 const ItemExplorerPage = lazy(() => import('./pages/ItemExplorerPage').then((module) => ({ default: module.ItemExplorerPage })));
+const ProjectComposerPage = lazy(() => import('./pages/ProjectComposerPage').then((module) => ({ default: module.ProjectComposerPage })));
 const SourcesPage = lazy(() => import('./pages/SourcesPage').then((module) => ({ default: module.SourcesPage })));
 const SpecializedToolsPage = lazy(() => import('./pages/SpecializedToolsPage').then((module) => ({ default: module.SpecializedToolsPage })));
 
@@ -44,6 +45,7 @@ type WorkspaceContext = { id: string; name: string };
 
 const nav = [
   ['Overview', AppsList24Regular],
+  ['Project Composer', BuildingFactory24Regular],
   ['Workspaces', BuildingFactory24Regular],
   ['Change Plans', Shield24Regular],
   ['Items', CloudDatabaseRegular],
@@ -283,6 +285,7 @@ export function App() {
           ))}
         </div>
         <div className={styles.cards}>
+          <Card><CardHeader header={<Subtitle1>Project Composer</Subtitle1>} description="Plan a declarative Fabric architecture, diff it against a live workspace and prepare VS Code authoring handoff." /><Button onClick={() => setSection('Project Composer')}>Compose project</Button></Card>
           <Card><CardHeader header={<Subtitle1>Workspace inventory & changes</Subtitle1>} description="Inventory workspaces and use guarded plans for the explicitly allowlisted create/update operations." /><Button onClick={() => setSection('Workspaces')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Change Plans</Subtitle1>} description="Review tenant-bound, expiring, single-use mutation plans created in the current backend session." /><Button onClick={() => setSection('Change Plans')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Item explorer</Subtitle1>} description="Select an item once and inherit its workspace/item IDs across detail, connection, job and schedule operations." /><Button onClick={() => setSection('Items')}>Open</Button></Card>
@@ -301,6 +304,7 @@ export function App() {
   }
 
   function renderSection() {
+    if (section === 'Project Composer') return <ProjectComposerPage connected={connected} workspaceContext={workspaceContext} />;
     if (section === 'Workspaces') {
       return (
         <>
@@ -378,7 +382,7 @@ export function App() {
       <header className={styles.header}>
         <div>
           <Title1>Fabric Ops Studio</Title1>
-          <Text size={200}>Management, operations and PowerShell</Text>
+          <Text size={200}>Project composition, management and operations</Text>
         </div>
         <div className={styles.sourceRow}>
           <Badge appearance="outline">READ EXECUTION</Badge>
