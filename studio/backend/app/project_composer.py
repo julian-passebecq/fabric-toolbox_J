@@ -73,7 +73,27 @@ def _actual_type(item: dict[str, Any]) -> str:
     return ""
 
 
+def _resolve_parameters(template: ProjectTemplate, supplied: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    specs = {parameter.name: parameter for parameter in template.parameters}
+    unknown = sorted(set(supplied) - set(specs))
+    if unknown:
+        raise ValueError("Unknown project parameters: " + ", ".join(unknown))
+
+    resolved: dict[str, Any] = {}
+    missing: list[str] = []
+    for parameter in template.parameters:
+        value = supplied.get(parameter.name, parameter.default)
+        if parameter.required and value in (None, ""):
+            missing.append(parameter.name)
+        if parameter.secret and value not in (None, ""):
+            resolved[parameter.name] = "***"
+        else:
+            resolved[parameter.name] = value
+    return resolved, missing
+
+
 def plan_project(template: ProjectTemplate, request: ProjectPlanRequest) -> ProjectPlan:
+    resolved_parameters, missing_parameters = _resolve_parameters(template, request.parameters)
     current_items = request.current_items
     live_inventory = False
     if current_items is None:
@@ -154,8 +174,15 @@ def plan_project(template: ProjectTemplate, request: ProjectPlanRequest) -> Proj
         live_inventory=live_inventory,
         actions=actions,
         counts={key: counts.get(key, 0) for key in ("create", "unchanged", "conflict", "unmanaged")},
+        resolved_parameters=resolved_parameters,
+        missing_parameters=missing_parameters,
         apply_supported=False,
         apply_note=(
+            ("Missing required project parameters: " + ", ".join(missing_parameters) + ". ")
+            if missing_parameters
+            else ""
+        )
+        + (
             "Project Composer is plan-only in this milestone. Item creation remains blocked until each "
             "Fabric create path is registered with the guarded-write broker and verification strategy."
         ),
