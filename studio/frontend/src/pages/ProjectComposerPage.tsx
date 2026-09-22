@@ -22,6 +22,7 @@ import {
   ProjectTemplate,
   createMutationPlan,
   getEventstreamDefinitionArtifact,
+  getProjectItemDefinitionArtifact,
   getProjectTemplates,
   planProject,
   runProjectAcceptance,
@@ -190,6 +191,8 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
   async function stageCreateAction(action: ProjectPlanAction) {
     if (!action.provisioning_capability_id) return;
     let artifacts: MutationArtifactInput[] = [];
+    let parameters = { ...action.provisioning_parameters };
+
     if (action.item_type === 'Eventstream') {
       const artifact = await getEventstreamDefinitionArtifact(
         template.id,
@@ -208,34 +211,84 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
         content: JSON.stringify(artifact.definition, null, 2),
       }];
     }
+
+    if (action.item_type === 'Notebook') {
+      const artifact = await getProjectItemDefinitionArtifact(
+        template.id,
+        action.item_id,
+        workspaceContext?.id,
+        parameterValues,
+      );
+      if (!artifact.ready || !artifact.artifact_parameter) {
+        throw new Error(
+          `${action.display_name} definition is not ready: ${artifact.missing_requirements.join(', ')}`,
+        );
+      }
+      parameters = { ...parameters, ...artifact.mutation_parameters };
+      artifacts = [{
+        parameter: artifact.artifact_parameter,
+        filename: artifact.filename,
+        content: artifact.content,
+      }];
+    }
+
     await createMutationPlan(
       action.provisioning_capability_id,
-      action.provisioning_parameters,
+      parameters,
       artifacts,
     );
   }
 
   async function stageReconciliationAction(action: ProjectPlanAction) {
     if (!action.reconciliation_capability_id) return;
-    const artifact = await getEventstreamDefinitionArtifact(
-      template.id,
-      workspaceContext?.id,
-      parameterValues,
-    );
-    setEventstreamArtifact(artifact);
-    if (!artifact.ready) {
-      throw new Error(
-        `Eventstream definition is not ready: ${artifact.missing_requirements.join(', ')}`,
+    let artifacts: MutationArtifactInput[] = [];
+    let parameters = { ...action.reconciliation_parameters };
+
+    if (action.item_type === 'Eventstream') {
+      const artifact = await getEventstreamDefinitionArtifact(
+        template.id,
+        workspaceContext?.id,
+        parameterValues,
       );
-    }
-    await createMutationPlan(
-      action.reconciliation_capability_id,
-      action.reconciliation_parameters,
-      [{
+      setEventstreamArtifact(artifact);
+      if (!artifact.ready) {
+        throw new Error(
+          `Eventstream definition is not ready: ${artifact.missing_requirements.join(', ')}`,
+        );
+      }
+      artifacts = [{
         parameter: 'EventstreamPathDefinition',
         filename: artifact.filename,
         content: JSON.stringify(artifact.definition, null, 2),
-      }],
+      }];
+    }
+
+    if (action.item_type === 'Notebook' || action.item_type === 'DataPipeline') {
+      const artifact = await getProjectItemDefinitionArtifact(
+        template.id,
+        action.item_id,
+        workspaceContext?.id,
+        parameterValues,
+      );
+      if (!artifact.ready) {
+        throw new Error(
+          `${action.display_name} definition is not ready: ${artifact.missing_requirements.join(', ')}`,
+        );
+      }
+      parameters = { ...parameters, ...artifact.mutation_parameters };
+      if (artifact.artifact_parameter) {
+        artifacts = [{
+          parameter: artifact.artifact_parameter,
+          filename: artifact.filename,
+          content: artifact.content,
+        }];
+      }
+    }
+
+    await createMutationPlan(
+      action.reconciliation_capability_id,
+      parameters,
+      artifacts,
     );
   }
 

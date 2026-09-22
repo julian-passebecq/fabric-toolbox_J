@@ -346,3 +346,59 @@ def test_guarded_eventstream_definition_update_binds_artifact_and_reads_back(mon
     )
     assert result.verification["definition"]["parts"][0]["path"] == "eventstream.json"
     assert not (tmp_path / plan.plan_id).exists()
+
+
+def test_guarded_pipeline_definition_update_uses_exact_plan_bound_hashtable(monkeypatch):
+    broker = MutationBroker()
+    monkeypatch.setattr(runtime, "status", lambda: _connected())
+    seen = {}
+
+    def validate(capability, parameters):
+        seen["validate"] = (capability.command, parameters["Definition"])
+        return {"success": True, "mode": "what-if"}
+
+    def execute(capability, parameters):
+        seen["execute"] = (capability.command, parameters["Definition"])
+        return {"success": True}
+
+    def read(capability, parameters):
+        seen["read"] = (capability.command, dict(parameters))
+        return {"definition": {"parts": [{"path": "pipeline-content.json"}]}}
+
+    monkeypatch.setattr(runtime, "validate_guarded_write", validate)
+    monkeypatch.setattr(runtime, "execute_guarded_write", execute)
+    monkeypatch.setattr(runtime, "execute_read", read)
+
+    definition = {
+        "parts": [
+            {
+                "path": "pipeline-content.json",
+                "payload": "YWJj",
+                "payloadType": "InlineBase64",
+            }
+        ]
+    }
+    update = next(
+        item for item in combined_catalog()
+        if item.command == "Update-FabricDataPipelineDefinition"
+    )
+    plan = broker.create_plan(
+        update,
+        {
+            "WorkspaceId": "ws-1",
+            "DataPipelineId": "pipeline-1",
+            "Definition": definition,
+        },
+    )
+
+    validation = broker.validate(plan.plan_id)
+    result = broker.execute(plan.plan_id, validation.plan.confirmation_text)
+
+    assert seen["validate"][0] == "Update-FabricDataPipelineDefinition"
+    assert seen["validate"][1] == definition
+    assert seen["execute"][1] == definition
+    assert seen["read"] == (
+        "Get-FabricDataPipelineDefinition",
+        {"WorkspaceId": "ws-1", "DataPipelineId": "pipeline-1"},
+    )
+    assert result.verification["definition"]["parts"][0]["path"] == "pipeline-content.json"

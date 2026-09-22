@@ -207,6 +207,9 @@ def _provisioning_for(
     if desired.description:
         parameters[provisioner["description_parameter"]] = desired.description[:256]
 
+    if desired.type == "Notebook":
+        parameters["NotebookFormat"] = "fabricGitSource"
+
     if desired.type == "KQLDatabase":
         parent_ref = str(desired.settings.get("parentEventhouseRef") or "")
         if not parent_ref:
@@ -239,6 +242,22 @@ def _provisioning_for(
 
 
 
+RECONCILERS: dict[str, dict[str, str]] = {
+    "Eventstream": {
+        "capability_id": "ps-eventstream-update-fabriceventstreamdefinition",
+        "id_parameter": "EventstreamId",
+    },
+    "Notebook": {
+        "capability_id": "ps-notebook-update-fabricnotebookdefinition",
+        "id_parameter": "NotebookId",
+    },
+    "DataPipeline": {
+        "capability_id": "ps-data-pipeline-update-fabricdatapipelinedefinition",
+        "id_parameter": "DataPipelineId",
+    },
+}
+
+
 def _reconciliation_for(
     desired,
     action: str,
@@ -247,22 +266,31 @@ def _reconciliation_for(
     existing_by_template_id: dict[str, dict[str, Any]],
     catalog_by_id: dict[str, Any],
 ) -> tuple[str | None, dict[str, Any], bool, str]:
-    if desired.type != "Eventstream":
+    reconciler = RECONCILERS.get(desired.type)
+    if not reconciler:
         return None, {}, False, ""
-    if action != "unchanged" or not existing_item:
-        return None, {}, False, "Definition reconciliation becomes available after the Eventstream exists in Fabric."
 
-    capability_id = "ps-eventstream-update-fabriceventstreamdefinition"
+    capability_id = reconciler["capability_id"]
+    item_label = desired.type
+
+    if action != "unchanged" or not existing_item:
+        return (
+            None,
+            {},
+            False,
+            f"Definition reconciliation becomes available after the {item_label} exists in Fabric.",
+        )
+
     capability = catalog_by_id.get(capability_id)
     if not capability or capability.execution_policy != "guarded-write":
-        return capability_id, {}, False, "The reviewed Eventstream definition update capability is not enabled."
+        return capability_id, {}, False, f"The reviewed {item_label} definition update capability is not enabled."
 
     if not request.workspace_id:
-        return capability_id, {}, False, "Select the live workspace before reconciling an Eventstream definition."
+        return capability_id, {}, False, f"Select the live workspace before reconciling a {item_label} definition."
 
-    eventstream_id = _actual_id(existing_item)
-    if not eventstream_id:
-        return capability_id, {}, False, "The existing Eventstream item ID could not be resolved."
+    item_id = _actual_id(existing_item)
+    if not item_id:
+        return capability_id, {}, False, f"The existing {item_label} item ID could not be resolved."
 
     missing_dependencies = [
         dependency for dependency in desired.depends_on
@@ -277,14 +305,18 @@ def _reconciliation_for(
             + ", ".join(missing_dependencies),
         )
 
+    parameters: dict[str, Any] = {
+        "WorkspaceId": request.workspace_id,
+        reconciler["id_parameter"]: item_id,
+    }
+    if desired.type == "Notebook":
+        parameters["NotebookFormat"] = "fabricGitSource"
+
     return (
         capability_id,
-        {
-            "WorkspaceId": request.workspace_id,
-            "EventstreamId": eventstream_id,
-        },
+        parameters,
         True,
-        "Existing Eventstream can be reconciled to the generated project definition through a guarded, artifact-bound Change Plan.",
+        f"Existing {item_label} can be reconciled to the generated project definition through a guarded Change Plan.",
     )
 
 
@@ -815,3 +847,314 @@ def accept_project(template: ProjectTemplate, request: ProjectPlanRequest) -> Pr
         live_eventstream_sha256=live_hash,
         definition_match=definition_match,
     )
+
+
+def _project_actual_by_template_id(
+    template: ProjectTemplate,
+    request: ProjectPlanRequest,
+) -> tuple[dict[str, dict[str, Any]], bool]:
+    current_items = request.current_items
+    live_inventory = False
+    if current_items is None:
+        if request.workspace_id:
+            current_items = _live_items(request.workspace_id)
+            live_inventory = True
+        else:
+            current_items = []
+
+    by_name_type: dict[tuple[str, str], dict[str, Any]] = {}
+    for item in current_items:
+        if not isinstance(item, dict):
+            continue
+        name = _actual_name(item).strip()
+        item_type = _actual_type(item).strip()
+        if name:
+            by_name_type[(name.casefold(), item_type.casefold())] = item
+
+    actual_by_template_id: dict[str, dict[str, Any]] = {}
+    for desired in template.items:
+        actual = by_name_type.get((desired.display_name.casefold(), desired.type.casefold()))
+        if actual:
+            actual_by_template_id[desired.id] = actual
+    return actual_by_template_id, live_inventory
+
+
+def _fabric_notebook_metadata_lines(metadata: dict[str, Any]) -> str:
+    body = json.dumps(metadata, indent=2)
+    return "\n".join("# META " + line for line in body.splitlines())
+
+
+def _fabric_notebook_cell_metadata() -> str:
+    return _fabric_notebook_metadata_lines(
+        {"language": "python", "language_group": "synapse_pyspark"}
+    )
+
+
+def _foilo_notebook_source(
+    desired,
+    workspace_id: str,
+    lakehouse_id: str,
+    lakehouse_name: str,
+    environment_id: str,
+    turbine_id: str,
+) -> str:
+    metadata = {
+        "kernel_info": {"name": "synapse_pyspark"},
+        "dependencies": {
+            "lakehouse": {
+                "default_lakehouse": lakehouse_id,
+                "default_lakehouse_name": lakehouse_name,
+                "default_lakehouse_workspace_id": workspace_id,
+                "known_lakehouses": [{"id": lakehouse_id}],
+            },
+            "environment": {
+                "environmentId": environment_id,
+                "workspaceId": workspace_id,
+            },
+        },
+    }
+
+    if desired.id == "de-bronze-notebook":
+        code = f'''from pyspark.sql import functions as F, types as T
+
+TURBINE_ID = {json.dumps(turbine_id)}
+SOURCE_PATH = "Files/foilo/incoming/*.json"
+BRONZE_TABLE = "bronze_turbine_telemetry"
+
+schema = T.StructType([
+    T.StructField("timestamp", T.StringType()),
+    T.StructField("turbine_id", T.StringType()),
+    T.StructField("wind_speed_ms", T.DoubleType()),
+    T.StructField("wind_direction_deg", T.DoubleType()),
+    T.StructField("rotor_rpm", T.DoubleType()),
+    T.StructField("generator_rpm", T.DoubleType()),
+    T.StructField("blade_pitch_deg", T.DoubleType()),
+    T.StructField("yaw_angle_deg", T.DoubleType()),
+    T.StructField("power_kw", T.DoubleType()),
+    T.StructField("power_target_kw", T.DoubleType()),
+    T.StructField("gearbox_temp_c", T.DoubleType()),
+    T.StructField("generator_temp_c", T.DoubleType()),
+    T.StructField("bearing_temp_c", T.DoubleType()),
+    T.StructField("vibration_mm_s", T.DoubleType()),
+    T.StructField("status", T.StringType()),
+    T.StructField("alarm_code", T.StringType()),
+])
+
+raw = spark.read.schema(schema).json(SOURCE_PATH)
+bronze = (
+    raw
+    .withColumn("turbine_id", F.coalesce(F.col("turbine_id"), F.lit(TURBINE_ID)))
+    .withColumn("ingested_at", F.current_timestamp())
+    .withColumn("source_file", F.input_file_name())
+)
+
+bronze.write.format("delta").mode("append").saveAsTable(BRONZE_TABLE)
+print(f"Wrote {{bronze.count()}} rows to {{BRONZE_TABLE}}")
+'''
+        title = "# Foil'o Bronze telemetry ingestion"
+    elif desired.id == "de-silver-notebook":
+        code = '''from pyspark.sql import functions as F
+
+BRONZE_TABLE = "bronze_turbine_telemetry"
+SILVER_TABLE = "silver_turbine_telemetry"
+
+bronze = spark.table(BRONZE_TABLE)
+silver = (
+    bronze
+    .withColumn("event_time", F.to_timestamp("timestamp"))
+    .filter(F.col("event_time").isNotNull())
+    .filter(F.col("turbine_id").isNotNull())
+    .filter((F.col("wind_speed_ms") >= 0) & (F.col("wind_speed_ms") <= 80))
+    .filter((F.col("vibration_mm_s").isNull()) | (F.col("vibration_mm_s") >= 0))
+    .dropDuplicates(["turbine_id", "event_time"])
+    .select(
+        "event_time",
+        "turbine_id",
+        "wind_speed_ms",
+        "wind_direction_deg",
+        "rotor_rpm",
+        "generator_rpm",
+        "blade_pitch_deg",
+        "yaw_angle_deg",
+        "power_kw",
+        "power_target_kw",
+        "gearbox_temp_c",
+        "generator_temp_c",
+        "bearing_temp_c",
+        "vibration_mm_s",
+        "status",
+        "alarm_code",
+        "ingested_at",
+        "source_file",
+    )
+)
+
+silver.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(SILVER_TABLE)
+print(f"Wrote {silver.count()} rows to {SILVER_TABLE}")
+'''
+        title = "# Foil'o Silver telemetry quality + normalization"
+    else:
+        raise ValueError(f"No generated Notebook source is registered for {desired.id}")
+
+    return "\n".join(
+        [
+            "# Fabric notebook source",
+            "",
+            "# METADATA ********************",
+            _fabric_notebook_metadata_lines(metadata),
+            "",
+            "# MARKDOWN ********************",
+            title,
+            "",
+            "# CELL ********************",
+            code.rstrip(),
+            "",
+            "# METADATA ********************",
+            _fabric_notebook_cell_metadata(),
+            "",
+        ]
+    )
+
+
+def build_project_item_definition_artifact(
+    template: ProjectTemplate,
+    item_id: str,
+    request: ProjectPlanRequest,
+) -> dict[str, Any]:
+    resolved_parameters, missing_parameters = _resolve_parameters(template, request.parameters)
+    desired = next((item for item in template.items if item.id == item_id), None)
+    if not desired:
+        raise ValueError(f"Project item not found: {item_id}")
+    if desired.type not in {"Notebook", "DataPipeline"}:
+        raise ValueError(f"Generated definition artifact is not registered for {desired.type}")
+
+    actual_by_template_id, live_inventory = _project_actual_by_template_id(template, request)
+    missing_requirements = list(missing_parameters)
+    if not request.workspace_id:
+        missing_requirements.append("workspace_id")
+
+    content = ""
+    mutation_parameters: dict[str, Any] = {}
+    artifact_parameter: str | None = None
+    filename = ""
+
+    if desired.type == "Notebook":
+        lakehouse_ref = next(
+            (
+                dependency for dependency in desired.depends_on
+                if next((item for item in template.items if item.id == dependency and item.type == "Lakehouse"), None)
+            ),
+            "",
+        )
+        environment_ref = next(
+            (
+                dependency for dependency in desired.depends_on
+                if next((item for item in template.items if item.id == dependency and item.type == "Environment"), None)
+            ),
+            "",
+        )
+        lakehouse = actual_by_template_id.get(lakehouse_ref)
+        environment = actual_by_template_id.get(environment_ref)
+        lakehouse_id = _actual_id(lakehouse)
+        environment_id = _actual_id(environment)
+        if not lakehouse_id:
+            missing_requirements.append("lakehouse_item_id")
+        if not environment_id:
+            missing_requirements.append("environment_item_id")
+
+        if request.workspace_id and lakehouse_id and environment_id:
+            lakehouse_item = next(item for item in template.items if item.id == lakehouse_ref)
+            content = _foilo_notebook_source(
+                desired,
+                request.workspace_id,
+                lakehouse_id,
+                lakehouse_item.display_name,
+                environment_id,
+                str(resolved_parameters.get("turbine_id") or "FOILO-WT-001"),
+            )
+        filename = "notebook-content.py"
+        artifact_parameter = "NotebookPathDefinition"
+        mutation_parameters = {"NotebookFormat": "fabricGitSource"}
+
+    elif desired.type == "DataPipeline":
+        notebook_refs = [
+            dependency for dependency in desired.depends_on
+            if next((item for item in template.items if item.id == dependency and item.type == "Notebook"), None)
+        ]
+        notebook_items: list[tuple[Any, str]] = []
+        for ref in notebook_refs:
+            actual = actual_by_template_id.get(ref)
+            actual_id = _actual_id(actual)
+            if not actual_id:
+                missing_requirements.append(f"{ref}_item_id")
+            else:
+                notebook_items.append((next(item for item in template.items if item.id == ref), actual_id))
+
+        if request.workspace_id and len(notebook_items) == len(notebook_refs) and notebook_items:
+            activities: list[dict[str, Any]] = []
+            previous_name: str | None = None
+            for desired_notebook, notebook_id in notebook_items:
+                activity_name = desired_notebook.display_name
+                activity: dict[str, Any] = {
+                    "name": activity_name,
+                    "type": "TridentNotebook",
+                    "dependsOn": (
+                        [{"activity": previous_name, "dependencyConditions": ["Succeeded"]}]
+                        if previous_name else []
+                    ),
+                    "policy": {
+                        "timeout": "0.12:00:00",
+                        "retry": 0,
+                        "retryIntervalInSeconds": 30,
+                    },
+                    "typeProperties": {
+                        "notebookId": notebook_id,
+                        "workspaceId": request.workspace_id,
+                    },
+                }
+                activities.append(activity)
+                previous_name = activity_name
+
+            pipeline_content = {
+                "properties": {
+                    "description": desired.description,
+                    "activities": activities,
+                }
+            }
+            content = json.dumps(pipeline_content, indent=2)
+            payload = base64.b64encode(content.encode("utf-8")).decode("ascii")
+            mutation_parameters = {
+                "Definition": {
+                    "parts": [
+                        {
+                            "path": "pipeline-content.json",
+                            "payload": payload,
+                            "payloadType": "InlineBase64",
+                        }
+                    ]
+                }
+            }
+        filename = "pipeline-content.json"
+
+    return {
+        "template_id": template.id,
+        "item_id": desired.id,
+        "item_type": desired.type,
+        "display_name": desired.display_name,
+        "filename": filename,
+        "ready": not missing_requirements and bool(content),
+        "missing_requirements": sorted(set(missing_requirements)),
+        "live_inventory": live_inventory,
+        "content": content,
+        "content_sha256": hashlib.sha256(content.encode("utf-8")).hexdigest() if content else None,
+        "artifact_parameter": artifact_parameter,
+        "mutation_parameters": mutation_parameters,
+        "provenance": {
+            "schema": (
+                "Microsoft Fabric Notebook definition (fabricGitSource)"
+                if desired.type == "Notebook"
+                else "Microsoft Fabric DataPipeline definition"
+            ),
+            "source": "Microsoft Fabric public item definition",
+        },
+    }

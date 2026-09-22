@@ -44,6 +44,8 @@ sources:
       - New-FabricEventhouse
       - New-FabricEventstream
       - Update-FabricEventstreamDefinition
+      - Update-FabricDataPipelineDefinition
+      - Update-FabricNotebookDefinition
       - New-FabricKQLDatabase
       - New-FabricKQLQueryset
       - New-FabricKQLDashboard
@@ -51,7 +53,7 @@ sources:
       - New-FabricNotebook
       - New-FabricEnvironment
       - New-FabricDataPipeline
-    guarded_write_note: These explicitly curated cmdlets are executable as guarded writes in Studio v0.12. Create operations and Eventstream definition reconciliation preserve upstream ShouldProcess/-WhatIf plus registered read-back verification. File-backed definitions are SHA-256 bound to the mutation plan; other discovered write/admin/destructive commands remain blocked until reviewed.
+    guarded_write_note: These explicitly curated cmdlets are executable as guarded writes in Studio v0.15. Create operations plus Eventstream, Notebook and Data Pipeline definition reconciliation preserve upstream ShouldProcess/-WhatIf and registered read-back verification. File-backed definitions use SHA-256-bound mutation artifacts; Data Pipeline definitions are exact plan-bound PowerShell hashtables. Other discovered write/admin/destructive commands remain blocked until reviewed.
     studio_modifies_upstream: false
 
   - id: microsoftfabricmgmt-session-runtime

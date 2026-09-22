@@ -1,5 +1,16 @@
 # Studio changelog
 
+## 0.15.0
+
+- Added reviewed read/update definition capabilities for Fabric Notebooks and Data Pipelines through the upstream MicrosoftFabricMgmt module.
+- Added safe recursive PowerShell hashtable rendering so upstream `Update-FabricDataPipelineDefinition -Definition @{...}` can stay inside the existing guarded-write transport.
+- Added generated Foil'o `fabricGitSource` notebook definitions for `bronze_ingestion` and `silver_transform`, bound to the selected live Lakehouse and Environment IDs.
+- Notebook create and definition reconciliation now stage SHA-bound `notebook-content.py` artifacts and explicitly use `NotebookFormat=fabricGitSource`.
+- Added a generated `pipeline-content.json` with ordered `TridentNotebook` activities that reference the live Bronze/Silver Notebook IDs and selected workspace ID.
+- Existing Data Pipelines can now reconcile the generated public definition through a plan-bound PowerShell hashtable, upstream `-WhatIf`, typed approval and definition read-back.
+- Deployment waves automatically carry the correct Notebook artifact or Data Pipeline definition without adding a separate execution path.
+- Bumped the Foil'o project template to v0.2.0 and added regression coverage for definition generation, dependency binding, hashtable safety and guarded execution.
+
 ## 0.14.0
 
 - Added a guided Project Composer deployment-wave control that combines all currently dependency-ready creates and reconciliations into one staging action.

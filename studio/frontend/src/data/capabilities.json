@@ -467,6 +467,37 @@
     "description": "Create a Fabric Notebook through the upstream cmdlet. Definition paths and notebook format stay explicit and auditable."
   },
   {
+    "id": "ps-notebook-get-fabricnotebookdefinition",
+    "title": "Get Notebook definition",
+    "category": "Notebook",
+    "provider": "MicrosoftFabricMgmt",
+    "source": "microsoft/fabric-toolbox",
+    "risk": "read",
+    "execution_policy": "read",
+    "command": "Get-FabricNotebookDefinition",
+    "source_path": "tools/MicrosoftFabricMgmt/source/Public/Notebook/Get-FabricNotebookDefinition.ps1",
+    "description": "Read a Fabric Notebook public definition through the upstream MicrosoftFabricMgmt cmdlet."
+  },
+  {
+    "id": "ps-notebook-update-fabricnotebookdefinition",
+    "title": "Update Notebook definition",
+    "category": "Notebook",
+    "provider": "MicrosoftFabricMgmt",
+    "source": "microsoft/fabric-toolbox",
+    "risk": "write",
+    "execution_policy": "guarded-write",
+    "supports_whatif": true,
+    "command": "Update-FabricNotebookDefinition",
+    "source_path": "tools/MicrosoftFabricMgmt/source/Public/Notebook/Update-FabricNotebookDefinition.ps1",
+    "verification_capability_id": "ps-notebook-get-fabricnotebookdefinition",
+    "verification_parameter_map": {
+      "WorkspaceId": "WorkspaceId",
+      "NotebookId": "NotebookId",
+      "NotebookFormat": "NotebookFormat"
+    },
+    "description": "Reconcile an existing Fabric Notebook definition through the upstream cmdlet with SHA-bound notebook source, upstream -WhatIf, typed approval and definition read-back."
+  },
+  {
     "id": "ps-environment-new-fabricenvironment",
     "title": "Create Environment",
     "category": "Environment",
@@ -501,6 +532,36 @@
       "DataPipelineName": "DataPipelineName"
     },
     "description": "Create a Fabric Data Pipeline through the upstream MicrosoftFabricMgmt cmdlet with guarded execution and read-back verification."
+  },
+  {
+    "id": "ps-data-pipeline-get-fabricdatapipelinedefinition",
+    "title": "Get Data Pipeline definition",
+    "category": "Data Pipeline",
+    "provider": "MicrosoftFabricMgmt",
+    "source": "microsoft/fabric-toolbox",
+    "risk": "read",
+    "execution_policy": "read",
+    "command": "Get-FabricDataPipelineDefinition",
+    "source_path": "tools/MicrosoftFabricMgmt/source/Public/Data Pipeline/Get-FabricDataPipelineDefinition.ps1",
+    "description": "Read a Fabric Data Pipeline public definition through the upstream MicrosoftFabricMgmt cmdlet."
+  },
+  {
+    "id": "ps-data-pipeline-update-fabricdatapipelinedefinition",
+    "title": "Update Data Pipeline definition",
+    "category": "Data Pipeline",
+    "provider": "MicrosoftFabricMgmt",
+    "source": "microsoft/fabric-toolbox",
+    "risk": "write",
+    "execution_policy": "guarded-write",
+    "supports_whatif": true,
+    "command": "Update-FabricDataPipelineDefinition",
+    "source_path": "tools/MicrosoftFabricMgmt/source/Public/Data Pipeline/Update-FabricDataPipelineDefinition.ps1",
+    "verification_capability_id": "ps-data-pipeline-get-fabricdatapipelinedefinition",
+    "verification_parameter_map": {
+      "WorkspaceId": "WorkspaceId",
+      "DataPipelineId": "DataPipelineId"
+    },
+    "description": "Reconcile an existing Fabric Data Pipeline public definition through the upstream cmdlet with exact plan-bound hashtable content, upstream -WhatIf, typed approval and definition read-back."
   },
   {
     "id": "rest-sqldatabase-create",

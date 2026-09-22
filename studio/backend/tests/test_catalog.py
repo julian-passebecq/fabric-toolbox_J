@@ -404,3 +404,70 @@ def test_eventstream_definition_read_and_update_are_reviewed():
     assert "-EventstreamId 'eventstream-1'" in command
     assert "-EventstreamPathDefinition '/tmp/eventstream.json'" in command
     assert "-WhatIf" in command
+
+
+def test_notebook_and_pipeline_definition_updates_are_reviewed_guarded_writes():
+    catalog = combined_catalog()
+    notebook_read = next(item for item in catalog if item.command == "Get-FabricNotebookDefinition")
+    notebook_update = next(item for item in catalog if item.command == "Update-FabricNotebookDefinition")
+    pipeline_read = next(item for item in catalog if item.command == "Get-FabricDataPipelineDefinition")
+    pipeline_update = next(item for item in catalog if item.command == "Update-FabricDataPipelineDefinition")
+
+    assert notebook_read.execution_policy == "read"
+    assert notebook_update.execution_policy == "guarded-write"
+    assert notebook_update.supports_whatif is True
+    assert notebook_update.verification_capability_id == "ps-notebook-get-fabricnotebookdefinition"
+
+    assert pipeline_read.execution_policy == "read"
+    assert pipeline_update.execution_policy == "guarded-write"
+    assert pipeline_update.supports_whatif is True
+    assert pipeline_update.verification_capability_id == "ps-data-pipeline-get-fabricdatapipelinedefinition"
+
+
+def test_guarded_pipeline_definition_renders_nested_hashtable_safely():
+    update = next(
+        item for item in combined_catalog()
+        if item.command == "Update-FabricDataPipelineDefinition"
+    )
+    definition = {
+        "parts": [
+            {
+                "path": "pipeline-content.json",
+                "payload": "YWJj",
+                "payloadType": "InlineBase64",
+            }
+        ]
+    }
+
+    command = build_guarded_write_command(
+        update,
+        {
+            "WorkspaceId": "ws-1",
+            "DataPipelineId": "pipeline-1",
+            "Definition": definition,
+        },
+        what_if=True,
+    )
+
+    assert "& 'Update-FabricDataPipelineDefinition'" in command
+    assert "-Definition @{" in command
+    assert "'parts' = @(" in command
+    assert "'path' = 'pipeline-content.json'" in command
+    assert "'payload' = 'YWJj'" in command
+    assert "-WhatIf" in command
+
+
+def test_guarded_pipeline_definition_rejects_non_string_hashtable_keys():
+    update = next(
+        item for item in combined_catalog()
+        if item.command == "Update-FabricDataPipelineDefinition"
+    )
+    with pytest.raises(ValueError, match="hashtable keys must be strings"):
+        build_guarded_write_command(
+            update,
+            {
+                "WorkspaceId": "ws-1",
+                "DataPipelineId": "pipeline-1",
+                "Definition": {1: "not-safe"},
+            },
+        )

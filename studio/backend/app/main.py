@@ -21,7 +21,7 @@ from .models import (
     SessionStatus,
 )
 from .mutations import broker
-from .project_composer import accept_project, build_eventstream_definition, get_project_template, list_project_templates, plan_project
+from .project_composer import accept_project, build_eventstream_definition, build_project_item_definition_artifact, get_project_template, list_project_templates, plan_project
 from .providers.fabric_rest import build_rest_get_command, execute_rest_read
 from .providers.microsoftfabricmgmt import (
     ProviderUnavailable,
@@ -35,7 +35,7 @@ from .specialized_tools import list_specialized_tools
 
 app = FastAPI(
     title="Fabric Ops Studio API",
-    version="0.14.0",
+    version="0.15.0",
     description="Fabric operations and declarative project-composition layer with guarded execution.",
 )
 
@@ -361,6 +361,47 @@ def project_eventstream_artifact(template_id: str, request: ProjectPlanRequest |
             "ready": artifact["ready"],
             "missing_requirements": artifact["missing_requirements"],
             "source_mode": artifact["source_mode"],
+        }
+    )
+    return artifact
+
+
+@app.post("/api/projects/templates/{template_id}/artifacts/items/{item_id}")
+def project_item_definition_artifact(
+    template_id: str,
+    item_id: str,
+    request: ProjectPlanRequest | None = None,
+) -> dict:
+    try:
+        template = get_project_template(template_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    try:
+        artifact = build_project_item_definition_artifact(
+            template,
+            item_id,
+            request or ProjectPlanRequest(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except UnsafeOperation as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ProviderUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    append_activity(
+        {
+            "action": "project.artifact.item-definition",
+            "template_id": template.id,
+            "item_id": item_id,
+            "item_type": artifact["item_type"],
+            "workspace_id": (request.workspace_id if request else None),
+            "ready": artifact["ready"],
+            "missing_requirements": artifact["missing_requirements"],
+            "content_sha256": artifact["content_sha256"],
         }
     )
     return artifact

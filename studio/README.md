@@ -67,6 +67,8 @@ These writes are executable through the guarded-write broker:
 - create Eventhouse via `New-FabricEventhouse`
 - create Eventstream via `New-FabricEventstream`
 - update Eventstream definition via `Update-FabricEventstreamDefinition`
+- update Notebook definition via `Update-FabricNotebookDefinition`
+- update Data Pipeline definition via `Update-FabricDataPipelineDefinition`
 - create KQL Database via `New-FabricKQLDatabase`
 - create KQL Queryset via `New-FabricKQLQueryset`
 - create KQL Dashboard via `New-FabricKQLDashboard`
@@ -75,7 +77,7 @@ These writes are executable through the guarded-write broker:
 - create Environment via `New-FabricEnvironment`
 - create Data Pipeline via `New-FabricDataPipeline`
 
-Every guarded item mutation uses upstream `SupportsShouldProcess` / `-WhatIf`, an expiring tenant-bound Studio plan and exact typed approval. Creates use name-based read-back through matching upstream `Get-Fabric*` cmdlets; Eventstream definition updates use definition read-back and SHA-bound artifact handling.
+Every guarded item mutation uses upstream `SupportsShouldProcess` / `-WhatIf`, an expiring tenant-bound Studio plan and exact typed approval. Creates use name-based read-back through matching upstream `Get-Fabric*` cmdlets. Eventstream and Notebook definition updates use definition read-back plus SHA-bound file artifacts; Data Pipeline definition updates use an exact plan-bound hashtable and definition read-back.
 
 For KQL Database, Composer resolves the existing parent Eventhouse item ID and passes it explicitly as `parentEventhouseId` before a create can be staged. Composer stages only dependency-ready resources; it never bypasses the guarded-write broker. Role changes, capacity assignment, other item lifecycle writes, job cancellation/retry, schedule writes, Git writes and destructive operations remain blocked until reviewed.
 
@@ -114,7 +116,7 @@ A feature record should make it possible to answer:
 5. Composer reports create / unchanged / conflict / unmanaged states and never deletes unmanaged items.
 6. With a target workspace selected, Composer calculates the current **Deployment wave** from dependency-ready creates and definition reconciliations. **Stage current wave** creates separate tenant-bound Change Plans; staging never executes a Fabric mutation.
 7. Open **Review individual approvals**. In **Change Plans**, run upstream `-WhatIf`, review each exact command, type that plan's confirmation text and execute plans individually. Studio deliberately provides no approve-all or execute-wave shortcut.
-8. Return to Composer and choose **Refresh after approvals**. The live inventory is re-planned and newly satisfied dependencies unlock the next wave (for example Eventhouse -> KQL Database -> Eventstream/query/dashboard).
+8. Return to Composer and choose **Refresh after approvals**. The live inventory is re-planned and newly satisfied dependencies unlock the next wave. Engineering waves now generate and bind the Foil'o Bronze/Silver Notebook source, then reconcile the Data Pipeline once both Notebook IDs exist.
 9. Run **deployment acceptance** for Foil'o once the RTI core exists. Studio verifies Eventhouse, KQL Database, Eventstream and Lakehouse presence, reads the deployed `eventstream.json`, and compares its canonical topology hash with the generated desired definition without returning the live definition body to the UI.
 10. Open **Workspaces** and refresh the live inventory whenever workspace context needs to change.
 11. Select **Use workspace** on a workspace card. Recent workspace choices are remembered locally per tenant without credentials.
