@@ -188,7 +188,9 @@ export function App() {
   const provisioningCommands = new Set([
     'New-FabricEventhouse',
     'New-FabricEventstream',
+    'New-FabricKQLDatabase',
     'New-FabricKQLQueryset',
+    'New-FabricKQLDashboard',
     'New-FabricLakehouse',
     'New-FabricNotebook',
     'New-FabricEnvironment',
@@ -321,7 +323,7 @@ export function App() {
       return (
         <OperationsPage
           title="Guarded provisioning"
-          description="Reviewed Fabric item creation through upstream MicrosoftFabricMgmt cmdlets. Every create requires a tenant-bound plan, upstream -WhatIf, exact typed approval and name-based read-back verification. KQL Database and KQL Dashboard remain gated pending dependency-aware Composer apply."
+          description="Reviewed Fabric item creation through upstream MicrosoftFabricMgmt cmdlets. Every create requires a tenant-bound plan, upstream -WhatIf, exact typed approval and name-based read-back verification. KQL Database keeps its parent Eventhouse dependency explicit; Composer stages only dependency-ready creates."
           capabilities={provisioningCapabilities}
           connected={connected}
           defaultParameters={workspaceDefaults}
