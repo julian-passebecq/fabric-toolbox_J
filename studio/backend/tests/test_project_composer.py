@@ -240,6 +240,7 @@ def test_direct_kafka_eventstream_artifact_requires_fabric_connection_id():
         workspace_id="workspace-1",
         current_items=[
             {"id": "eventhouse-123", "displayName": "foilo_rti", "type": "Eventhouse"},
+            {"id": "database-123", "displayName": "wind_telemetry", "type": "KQLDatabase"},
         ],
         parameters={"ingestion_mode": "direct-kafka-source"},
     )
@@ -268,6 +269,7 @@ def test_eventstream_artifact_api_exposes_definition_without_logging_secrets():
             workspace_id="workspace-1",
             current_items=[
                 {"id": "eventhouse-123", "displayName": "foilo_rti", "type": "Eventhouse"},
+                {"id": "database-123", "displayName": "wind_telemetry", "type": "KQLDatabase"},
             ],
             parameters={"kafka_password": "do-not-return", "kql_table_name": "telemetry_raw"},
         ),
