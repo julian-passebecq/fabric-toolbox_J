@@ -119,7 +119,7 @@ Specialized tools keep their own authentication, dependency and output lifecycle
 - [x] dependency-aware provisioning readiness and mutation-plan staging
 - [x] generate reviewed Eventstream definition artifact for CustomEndpoint/ApacheKafka -> Eventhouse
 - [x] wire generated Eventstream definition artifact into guarded Eventstream create execution
-- [ ] register guarded Eventstream definition update for an existing Eventstream
+- [x] register guarded Eventstream definition update for an existing Eventstream
 - [ ] register definition update flows for Notebook and Data Pipeline
 - [x] execute Composer-staged plans from Change Plans with WhatIf + typed approval
 - [ ] one-click dependency-wave orchestration with explicit per-plan approvals
