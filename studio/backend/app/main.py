@@ -18,10 +18,11 @@ from .models import (
     ProjectPlan,
     ProjectPlanRequest,
     ProjectTemplate,
+    ProjectWaveStageResult,
     SessionStatus,
 )
 from .mutations import broker
-from .project_composer import accept_project, build_eventstream_definition, get_project_template, list_project_templates, plan_project
+from .project_composer import accept_project, build_eventstream_definition, get_project_template, list_project_templates, plan_project, stage_project_wave
 from .providers.fabric_rest import build_rest_get_command, execute_rest_read
 from .providers.microsoftfabricmgmt import (
     ProviderUnavailable,
@@ -35,7 +36,7 @@ from .specialized_tools import list_specialized_tools
 
 app = FastAPI(
     title="Fabric Ops Studio API",
-    version="0.13.0",
+    version="0.14.0",
     description="Fabric operations and declarative project-composition layer with guarded execution.",
 )
 
@@ -364,6 +365,49 @@ def project_eventstream_artifact(template_id: str, request: ProjectPlanRequest |
         }
     )
     return artifact
+
+
+@app.post("/api/projects/templates/{template_id}/waves/stage", response_model=ProjectWaveStageResult)
+def project_stage_wave(template_id: str, request: ProjectPlanRequest | None = None) -> ProjectWaveStageResult:
+    try:
+        template = get_project_template(template_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    try:
+        result = stage_project_wave(template, request or ProjectPlanRequest())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except UnsafeOperation as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ProviderUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    append_activity(
+        {
+            "action": "project.wave.stage",
+            "template_id": template.id,
+            "workspace_id": result.workspace_id,
+            "wave": result.wave,
+            "status": result.status,
+            "staged": [
+                {
+                    "item_id": item.item_id,
+                    "capability_id": item.capability_id,
+                    "plan_id": item.plan_id,
+                    "artifact_sha256": item.artifact_sha256,
+                }
+                for item in result.staged
+            ],
+            "issues": [
+                {"item_id": issue.item_id, "detail": issue.detail}
+                for issue in result.issues
+            ],
+        }
+    )
+    return result
 
 
 @app.post("/api/projects/templates/{template_id}/acceptance", response_model=ProjectAcceptanceReport)
