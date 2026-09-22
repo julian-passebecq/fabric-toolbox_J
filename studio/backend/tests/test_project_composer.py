@@ -322,3 +322,23 @@ def test_missing_eventstream_does_not_offer_definition_reconciliation():
     assert eventstream.action == "create"
     assert eventstream.reconciliation_ready is False
     assert eventstream.reconciliation_capability_id is None
+
+
+def test_existing_eventstream_reconciliation_waits_for_declared_dependencies():
+    template = get_project_template("foilo-wind-rti")
+    plan = plan_project(
+        template,
+        ProjectPlanRequest(
+            workspace_id="workspace-1",
+            current_items=[
+                {"id": "eventstream-1", "displayName": "wind_events", "type": "Eventstream"},
+            ],
+        ),
+    )
+    eventstream = next(action for action in plan.actions if action.item_id == "rti-eventstream")
+
+    assert eventstream.action == "unchanged"
+    assert eventstream.reconciliation_ready is False
+    assert eventstream.reconciliation_capability_id == "ps-eventstream-update-fabriceventstreamdefinition"
+    assert "rti-eventhouse" in eventstream.reconciliation_reason
+    assert "rti-kql-database" in eventstream.reconciliation_reason
