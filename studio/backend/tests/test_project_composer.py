@@ -1,7 +1,10 @@
+import base64
+import json
+
 import pytest
 
 from app.models import ProjectPlanRequest
-from app.project_composer import get_project_template, list_project_templates, plan_project
+from app.project_composer import accept_project, build_eventstream_definition, get_project_template, list_project_templates, plan_project
 
 
 def test_foilo_template_covers_rti_and_engineering_items():
@@ -342,3 +345,126 @@ def test_existing_eventstream_reconciliation_waits_for_declared_dependencies():
     assert eventstream.reconciliation_capability_id == "ps-eventstream-update-fabriceventstreamdefinition"
     assert "rti-eventhouse" in eventstream.reconciliation_reason
     assert "rti-kql-database" in eventstream.reconciliation_reason
+
+
+def _encoded_eventstream_response(definition):
+    payload = base64.b64encode(
+        json.dumps(definition, sort_keys=True).encode("utf-8")
+    ).decode("ascii")
+    return {
+        "definition": {
+            "parts": [
+                {
+                    "path": "eventstream.json",
+                    "payload": payload,
+                    "payloadType": "InlineBase64",
+                }
+            ]
+        }
+    }
+
+
+def _foilo_acceptance_items():
+    return [
+        {"id": "eventhouse-1", "displayName": "foilo_rti", "type": "Eventhouse"},
+        {"id": "database-1", "displayName": "wind_telemetry", "type": "KQLDatabase"},
+        {"id": "eventstream-1", "displayName": "wind_events", "type": "Eventstream"},
+        {"id": "lakehouse-1", "displayName": "foilo_lakehouse", "type": "Lakehouse"},
+    ]
+
+
+def test_foilo_deployment_acceptance_passes_when_live_topology_matches(monkeypatch):
+    template = get_project_template("foilo-wind-rti")
+    request = ProjectPlanRequest(
+        workspace_id="workspace-1",
+        current_items=_foilo_acceptance_items(),
+    )
+    desired = build_eventstream_definition(template, request)["definition"]
+
+    monkeypatch.setattr(
+        "app.project_composer.runtime.execute_read",
+        lambda capability, parameters: _encoded_eventstream_response(desired),
+    )
+
+    report = accept_project(template, request)
+
+    assert report.accepted is True
+    assert report.status == "pass"
+    assert report.definition_match is True
+    assert report.desired_eventstream_sha256 == report.live_eventstream_sha256
+    assert all(check.status == "pass" for check in report.checks)
+    topology = next(check for check in report.checks if check.id == "eventstream-definition")
+    assert topology.item_id == "eventstream-1"
+
+
+def test_foilo_deployment_acceptance_detects_eventstream_drift(monkeypatch):
+    template = get_project_template("foilo-wind-rti")
+    request = ProjectPlanRequest(
+        workspace_id="workspace-1",
+        current_items=_foilo_acceptance_items(),
+    )
+    live = build_eventstream_definition(template, request)["definition"]
+    live["destinations"][0]["properties"]["tableName"] = "wrong_table"
+
+    monkeypatch.setattr(
+        "app.project_composer.runtime.execute_read",
+        lambda capability, parameters: _encoded_eventstream_response(live),
+    )
+
+    report = accept_project(template, request)
+
+    assert report.accepted is False
+    assert report.status == "fail"
+    assert report.definition_match is False
+    assert report.desired_eventstream_sha256 != report.live_eventstream_sha256
+    topology = next(check for check in report.checks if check.id == "eventstream-definition")
+    assert topology.status == "fail"
+    assert "reconciliation" in topology.detail.lower()
+
+
+def test_foilo_deployment_acceptance_reports_missing_core_item(monkeypatch):
+    template = get_project_template("foilo-wind-rti")
+    items = [item for item in _foilo_acceptance_items() if item["type"] != "Lakehouse"]
+    request = ProjectPlanRequest(workspace_id="workspace-1", current_items=items)
+    desired = build_eventstream_definition(template, request)["definition"]
+
+    monkeypatch.setattr(
+        "app.project_composer.runtime.execute_read",
+        lambda capability, parameters: _encoded_eventstream_response(desired),
+    )
+
+    report = accept_project(template, request)
+
+    assert report.accepted is False
+    lakehouse = next(check for check in report.checks if check.id == "item:de-lakehouse")
+    assert lakehouse.status == "fail"
+    assert "missing" in lakehouse.detail.lower()
+
+
+def test_foilo_deployment_acceptance_requires_workspace_id():
+    template = get_project_template("foilo-wind-rti")
+    with pytest.raises(ValueError, match="workspace_id"):
+        accept_project(template, ProjectPlanRequest(current_items=[]))
+
+
+def test_project_acceptance_api_returns_hashes_without_live_definition(monkeypatch):
+    from app.main import project_acceptance
+
+    template = get_project_template("foilo-wind-rti")
+    request = ProjectPlanRequest(
+        workspace_id="workspace-1",
+        current_items=_foilo_acceptance_items(),
+    )
+    desired = build_eventstream_definition(template, request)["definition"]
+    monkeypatch.setattr(
+        "app.project_composer.runtime.execute_read",
+        lambda capability, parameters: _encoded_eventstream_response(desired),
+    )
+
+    response = project_acceptance("foilo-wind-rti", request)
+
+    assert response.accepted is True
+    assert response.desired_eventstream_sha256
+    assert response.live_eventstream_sha256
+    serialized = response.model_dump()
+    assert "definition" not in serialized
