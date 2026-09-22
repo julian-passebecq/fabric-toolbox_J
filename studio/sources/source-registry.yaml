@@ -43,12 +43,14 @@ sources:
       - Update-FabricWorkspace
       - New-FabricEventhouse
       - New-FabricEventstream
+      - New-FabricKQLDatabase
       - New-FabricKQLQueryset
+      - New-FabricKQLDashboard
       - New-FabricLakehouse
       - New-FabricNotebook
       - New-FabricEnvironment
       - New-FabricDataPipeline
-    guarded_write_note: These explicitly curated cmdlets are executable as guarded writes in Studio v0.9. Each create supports upstream ShouldProcess/-WhatIf and has a registered name-based read-back capability. KQL Database, KQL Dashboard and all other discovered write/admin/destructive commands remain blocked until their dependency or API semantics are reviewed.
+    guarded_write_note: These explicitly curated cmdlets are executable as guarded writes in Studio v0.10. Each create supports upstream ShouldProcess/-WhatIf and has a registered name-based read-back capability. KQL Database keeps its parent Eventhouse dependency explicit; other discovered write/admin/destructive commands remain blocked until reviewed.
     studio_modifies_upstream: false
 
   - id: microsoftfabricmgmt-session-runtime

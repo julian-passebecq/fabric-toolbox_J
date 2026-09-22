@@ -206,6 +206,42 @@
     "description": "Create an Eventstream through the upstream MicrosoftFabricMgmt cmdlet. Optional definition paths remain explicit operator inputs."
   },
   {
+    "id": "ps-kql-database-new-fabrickqldatabase",
+    "title": "Create KQL Database",
+    "category": "KQL Database",
+    "provider": "MicrosoftFabricMgmt",
+    "source": "microsoft/fabric-toolbox",
+    "risk": "write",
+    "execution_policy": "guarded-write",
+    "supports_whatif": true,
+    "command": "New-FabricKQLDatabase",
+    "source_path": "tools/MicrosoftFabricMgmt/source/Public/KQL Database/New-FabricKQLDatabase.ps1",
+    "verification_capability_id": "ps-kql-database-get-fabrickqldatabase",
+    "verification_parameter_map": {
+      "WorkspaceId": "WorkspaceId",
+      "KQLDatabaseName": "KQLDatabaseName"
+    },
+    "description": "Create a KQL Database through the upstream MicrosoftFabricMgmt cmdlet. ReadWrite creation requires the parent Eventhouse item ID; Studio keeps this dependency explicit and verifies by database name."
+  },
+  {
+    "id": "ps-kql-dashboard-new-fabrickqldashboard",
+    "title": "Create KQL Dashboard",
+    "category": "KQL Dashboard",
+    "provider": "MicrosoftFabricMgmt",
+    "source": "microsoft/fabric-toolbox",
+    "risk": "write",
+    "execution_policy": "guarded-write",
+    "supports_whatif": true,
+    "command": "New-FabricKQLDashboard",
+    "source_path": "tools/MicrosoftFabricMgmt/source/Public/KQL Dashboard/New-FabricKQLDashboard.ps1",
+    "verification_capability_id": "ps-kql-dashboard-get-fabrickqldashboard",
+    "verification_parameter_map": {
+      "WorkspaceId": "WorkspaceId",
+      "KQLDashboardName": "KQLDashboardName"
+    },
+    "description": "Create a KQL Dashboard through the upstream MicrosoftFabricMgmt cmdlet with guarded execution, upstream -WhatIf and name-based read-back verification."
+  },
+  {
     "id": "ps-kql-queryset-new-fabrickqlqueryset",
     "title": "Create KQL Queryset",
     "category": "KQL Queryset",

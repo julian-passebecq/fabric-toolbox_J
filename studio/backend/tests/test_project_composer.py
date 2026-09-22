@@ -133,3 +133,72 @@ def test_project_api_functions_expose_template_and_validate_parameters():
     with pytest.raises(HTTPException) as missing:
         api_project_template("does-not-exist")
     assert missing.value.status_code == 404
+
+
+def test_first_foilo_provisioning_wave_is_dependency_safe():
+    template = get_project_template("foilo-wind-rti")
+    plan = plan_project(
+        template,
+        ProjectPlanRequest(workspace_id="workspace-1", current_items=[]),
+    )
+
+    by_id = {action.item_id: action for action in plan.actions}
+
+    assert by_id["rti-eventhouse"].provisioning_ready is True
+    assert by_id["de-lakehouse"].provisioning_ready is True
+    assert by_id["de-environment"].provisioning_ready is True
+
+    assert by_id["rti-kql-database"].provisioning_ready is False
+    assert "rti-eventhouse" in by_id["rti-kql-database"].provisioning_reason
+    assert by_id["rti-eventstream"].provisioning_ready is False
+    assert by_id["de-bronze-notebook"].provisioning_ready is False
+
+
+def test_kql_database_becomes_ready_when_parent_eventhouse_exists():
+    template = get_project_template("foilo-wind-rti")
+    current = [
+        {"id": "eventhouse-123", "displayName": "foilo_rti", "type": "Eventhouse"},
+        {"id": "lakehouse-123", "displayName": "foilo_lakehouse", "type": "Lakehouse"},
+        {"id": "environment-123", "displayName": "foilo_spark", "type": "Environment"},
+    ]
+
+    plan = plan_project(
+        template,
+        ProjectPlanRequest(workspace_id="workspace-1", current_items=current),
+    )
+    by_id = {action.item_id: action for action in plan.actions}
+    database = by_id["rti-kql-database"]
+    bronze = by_id["de-bronze-notebook"]
+
+    assert database.provisioning_ready is True
+    assert database.provisioning_capability_id == "ps-kql-database-new-fabrickqldatabase"
+    assert database.provisioning_parameters == {
+        "WorkspaceId": "workspace-1",
+        "KQLDatabaseName": "wind_telemetry",
+        "KQLDatabaseDescription": "KQL database for turbine telemetry, alarms and operational state.",
+        "parentEventhouseId": "eventhouse-123",
+        "KQLDatabaseType": "ReadWrite",
+    }
+
+    assert bronze.provisioning_ready is True
+    assert bronze.provisioning_capability_id == "ps-notebook-new-fabricnotebook"
+    assert bronze.provisioning_parameters["WorkspaceId"] == "workspace-1"
+    assert bronze.provisioning_parameters["NotebookName"] == "bronze_ingestion"
+
+
+def test_kql_dashboard_waits_for_database_and_queryset_dependencies():
+    template = get_project_template("foilo-wind-rti")
+    current = [
+        {"id": "db-1", "displayName": "wind_telemetry", "type": "KQLDatabase"},
+        {"id": "queryset-1", "displayName": "wind_operations", "type": "KQLQueryset"},
+    ]
+
+    plan = plan_project(
+        template,
+        ProjectPlanRequest(workspace_id="workspace-1", current_items=current),
+    )
+    dashboard = next(action for action in plan.actions if action.item_id == "rti-dashboard")
+
+    assert dashboard.provisioning_ready is True
+    assert dashboard.provisioning_capability_id == "ps-kql-dashboard-new-fabrickqldashboard"
+    assert dashboard.provisioning_parameters["KQLDashboardName"] == "wind_realtime_dashboard"

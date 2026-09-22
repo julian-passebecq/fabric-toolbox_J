@@ -17,6 +17,7 @@ import {
   ProjectPlan,
   ProjectPlanAction,
   ProjectTemplate,
+  createMutationPlan,
   getProjectTemplates,
   planProject,
 } from '../api/client';
@@ -26,6 +27,7 @@ type WorkspaceContext = { id: string; name: string };
 type Props = {
   connected: boolean;
   workspaceContext: WorkspaceContext | null;
+  onOpenChangePlans: () => void;
 };
 
 const useStyles = makeStyles({
@@ -45,7 +47,7 @@ function actionAppearance(action?: ProjectPlanAction['action']) {
   return 'outline';
 }
 
-export function ProjectComposerPage({ connected, workspaceContext }: Props) {
+export function ProjectComposerPage({ connected, workspaceContext, onOpenChangePlans }: Props) {
   const styles = useStyles();
   const [templates, setTemplates] = useState<ProjectTemplate[]>([]);
   const [selectedId, setSelectedId] = useState('');
@@ -53,6 +55,8 @@ export function ProjectComposerPage({ connected, workspaceContext }: Props) {
   const [parameterValues, setParameterValues] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(true);
   const [planning, setPlanning] = useState(false);
+  const [staging, setStaging] = useState(false);
+  const [stagedItemIds, setStagedItemIds] = useState<string[]>([]);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -85,6 +89,7 @@ export function ProjectComposerPage({ connected, workspaceContext }: Props) {
     }
     setParameterValues(defaults);
     setPlan(null);
+    setStagedItemIds([]);
   }, [template]);
 
   const planById = useMemo(() => {
@@ -98,6 +103,18 @@ export function ProjectComposerPage({ connected, workspaceContext }: Props) {
     return Array.from(new Set(template.items.map((item) => item.area)));
   }, [template]);
 
+  const readyCreates = useMemo(
+    () => (plan?.actions ?? []).filter(
+      (action) => action.provisioning_ready && Boolean(action.provisioning_capability_id),
+    ),
+    [plan],
+  );
+
+  const unstagedReadyCreates = useMemo(
+    () => readyCreates.filter((action) => !stagedItemIds.includes(action.item_id)),
+    [readyCreates, stagedItemIds],
+  );
+
   async function handlePlan() {
     if (!template) return;
     setPlanning(true);
@@ -105,11 +122,32 @@ export function ProjectComposerPage({ connected, workspaceContext }: Props) {
     try {
       const result = await planProject(template.id, workspaceContext?.id, parameterValues);
       setPlan(result);
+      setStagedItemIds([]);
     } catch (err) {
       setPlan(null);
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setPlanning(false);
+    }
+  }
+
+  async function handleStageReady() {
+    if (!unstagedReadyCreates.length) return;
+    setStaging(true);
+    setError('');
+    const staged: string[] = [];
+    try {
+      for (const action of unstagedReadyCreates) {
+        if (!action.provisioning_capability_id) continue;
+        await createMutationPlan(action.provisioning_capability_id, action.provisioning_parameters);
+        staged.push(action.item_id);
+      }
+      setStagedItemIds((current) => Array.from(new Set([...current, ...staged])));
+    } catch (err) {
+      setStagedItemIds((current) => Array.from(new Set([...current, ...staged])));
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setStaging(false);
     }
   }
 
@@ -220,6 +258,29 @@ export function ProjectComposerPage({ connected, workspaceContext }: Props) {
         </div>
       )}
 
+      {plan && readyCreates.length > 0 && (
+        <div className={styles.warning}>
+          <Text weight="semibold">{readyCreates.length} create action(s) are dependency-ready.</Text>
+          <Text block>Stage them as tenant-bound guarded change plans. This does not create anything yet.</Text>
+          <div className={styles.row}>
+            <Button
+              appearance="primary"
+              disabled={staging || unstagedReadyCreates.length === 0}
+              onClick={handleStageReady}
+            >
+              {staging
+                ? 'Staging…'
+                : unstagedReadyCreates.length > 0
+                  ? `Stage ${unstagedReadyCreates.length} ready create plan(s)`
+                  : 'Ready creates staged'}
+            </Button>
+            {stagedItemIds.length > 0 && (
+              <Button appearance="secondary" onClick={onOpenChangePlans}>Open Change Plans</Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {plan && (
         <div className={styles.stats}>
           {[
@@ -254,11 +315,14 @@ export function ProjectComposerPage({ connected, workspaceContext }: Props) {
                     <Badge appearance="outline">{item.definition_strategy}</Badge>
                     {item.vscode_handoff && <Badge appearance="tint">VS CODE</Badge>}
                     {action && <Badge appearance={actionAppearance(action.action)}>{action.action.toUpperCase()}</Badge>}
+                    {action?.provisioning_ready && <Badge appearance="tint">READY TO STAGE</Badge>}
+                    {action && stagedItemIds.includes(action.item_id) && <Badge appearance="filled">STAGED</Badge>}
                   </div>
                   {item.depends_on.length > 0 && (
                     <Text block size={200} className={styles.muted}>Depends on: {item.depends_on.join(', ')}</Text>
                   )}
                   {action && <Text block size={200}>{action.reason}</Text>}
+                  {action?.provisioning_reason && <Text block size={200} className={styles.muted}>{action.provisioning_reason}</Text>}
                 </Card>
               );
             })}
@@ -282,8 +346,8 @@ export function ProjectComposerPage({ connected, workspaceContext }: Props) {
       )}
 
       <div className={styles.warning}>
-        <Text weight="semibold">Apply is still gated.</Text>
-        <Text block>{plan?.apply_note ?? 'Run a plan first. The current milestone does not broaden the guarded-write allowlist.'}</Text>
+        <Text weight="semibold">Execution stays guarded.</Text>
+        <Text block>{plan?.apply_note ?? 'Run a plan first. Composer only stages reviewed change plans; execution happens in Change Plans.'}</Text>
       </div>
     </>
   );

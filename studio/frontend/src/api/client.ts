@@ -212,6 +212,10 @@ export type ProjectPlanAction = {
   reason: string;
   depends_on: string[];
   vscode_handoff: boolean;
+  provisioning_capability_id?: string;
+  provisioning_parameters: Record<string, unknown>;
+  provisioning_ready: boolean;
+  provisioning_reason: string;
 };
 
 export type ProjectPlan = {

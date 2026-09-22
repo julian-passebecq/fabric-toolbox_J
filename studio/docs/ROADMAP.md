@@ -114,17 +114,18 @@ Specialized tools keep their own authentication, dependency and output lifecycle
 - [x] Project Composer API and Fluent UI page
 - [x] register guarded create operations for Eventhouse, Eventstream and KQL Queryset
 - [x] register guarded create operations for Lakehouse, Environment, Notebook and Data Pipeline
-- [ ] register dependency-aware KQL Database creation after resolving parent Eventhouse ID
-- [ ] register KQL Dashboard create through reviewed official REST coverage
+- [x] register dependency-aware KQL Database creation after resolving parent Eventhouse ID
+- [x] register KQL Dashboard creation through upstream MicrosoftFabricMgmt
+- [x] dependency-aware provisioning readiness and mutation-plan staging
 - [ ] register Eventstream definition create/update flow
 - [ ] register definition update flows for Notebook and Data Pipeline
-- [ ] dependency-aware apply ordering and read-back verification
+- [ ] dependency-aware execution orchestration across successive change-plan waves
 - [ ] project manifest export/import
 - [ ] VS Code Fabric extension deep-link or workspace-folder handoff where supported
 - [ ] Foil'o live Oracle/Kafka endpoint parameter set
 - [ ] Foil'o Eventstream -> Eventhouse/KQL -> Lakehouse deployment acceptance test
 
-Project Composer is plan-only until the item-specific write surface has been reviewed. A template is not an execution allowlist.
+Project Composer can stage only reviewed, dependency-ready creates into the guarded Change Plans broker. It does not execute plans itself, and a template never grants mutation authority.
 
 ## Next high-value pass
 
