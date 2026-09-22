@@ -34,7 +34,7 @@ from .specialized_tools import list_specialized_tools
 
 app = FastAPI(
     title="Fabric Ops Studio API",
-    version="0.11.0",
+    version="0.12.0",
     description="Fabric operations and declarative project-composition layer with guarded execution.",
 )
 
