@@ -126,7 +126,7 @@ Specialized tools keep their own authentication, dependency and output lifecycle
 - [ ] project manifest export/import
 - [ ] VS Code Fabric extension deep-link or workspace-folder handoff where supported
 - [x] Foil'o live Oracle/Kafka endpoint parameter set
-- [ ] Foil'o Eventstream -> Eventhouse/KQL -> Lakehouse deployment acceptance test
+- [x] Foil'o Eventstream -> Eventhouse/KQL -> Lakehouse deployment acceptance test
 
 Project Composer can stage only reviewed, dependency-ready creates into the guarded Change Plans broker. It does not execute plans itself, and a template never grants mutation authority.
 

@@ -1,5 +1,15 @@
 # Studio changelog
 
+## 0.13.0
+
+- Added a read-only Foil'o deployment acceptance report for the selected live Fabric workspace.
+- Verifies the core RTI chain: Eventhouse, KQL Database, Eventstream and Lakehouse presence with expected names/types.
+- Reads the deployed Eventstream definition through reviewed upstream `Get-FabricEventstreamDefinition`, decodes `eventstream.json` and compares a canonical topology hash to the generated desired definition.
+- Reports Eventstream topology drift without returning or logging the live definition body.
+- Added a Project Composer acceptance checklist with per-check PASS/FAIL status and desired/live topology hash prefixes.
+- Invalidates stale acceptance results when the target workspace or project parameters change.
+- Added regression coverage for matching topology, drift, missing core items, missing workspace context and API response privacy.
+
 ## 0.12.0
 
 - Added reviewed read access for `Get-FabricEventstreamDefinition` through the upstream MicrosoftFabricMgmt module.

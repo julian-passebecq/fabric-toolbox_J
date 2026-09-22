@@ -105,7 +105,9 @@ sources:
       create_updates: reviewed-guarded-only
       destructive_changes: blocked
       unmanaged_items: preserved
-    note: Composer loads reviewed project manifests, diffs desired items against selected workspace inventory and stages only individually reviewed guarded create/update paths. Existing Eventstream definitions can be reconciled with SHA-bound generated artifacts; unreviewed mutations remain blocked.
+      live_acceptance: registered Fabric Items inventory plus reviewed Get-FabricEventstreamDefinition read
+      acceptance_definition_body_exposed: false
+    note: Composer loads reviewed project manifests, diffs desired items against selected workspace inventory, stages only individually reviewed guarded create/update paths, and can run a read-only deployment acceptance check. Existing Eventstream definitions can be reconciled with SHA-bound generated artifacts; acceptance compares canonical hashes without returning the deployed definition body.
   - id: fabric-rest
     name: Microsoft Fabric REST API
     origin: microsoft-official-api
