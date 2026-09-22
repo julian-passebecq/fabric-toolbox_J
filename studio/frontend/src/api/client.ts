@@ -53,6 +53,19 @@ export type ExecutionResponse = {
   result: Record<string, unknown>;
 };
 
+export type MutationArtifactInput = {
+  parameter: string;
+  filename: string;
+  content: string;
+};
+
+export type MutationArtifactDigest = {
+  parameter: string;
+  filename: string;
+  sha256: string;
+  size_bytes: number;
+};
+
 export type MutationPlan = {
   plan_id: string;
   capability_id: string;
@@ -61,6 +74,7 @@ export type MutationPlan = {
   risk: Risk;
   tenant_id: string;
   parameters: Record<string, unknown>;
+  artifacts: MutationArtifactDigest[];
   rendered_command: string;
   validation_command?: string;
   supports_validation: boolean;
@@ -299,10 +313,14 @@ export function previewCapability(capabilityId: string, parameters: Record<strin
   });
 }
 
-export function createMutationPlan(capabilityId: string, parameters: Record<string, unknown> = {}) {
+export function createMutationPlan(
+  capabilityId: string,
+  parameters: Record<string, unknown> = {},
+  artifacts: MutationArtifactInput[] = [],
+) {
   return request<MutationPlan>(`/api/capabilities/${encodeURIComponent(capabilityId)}/mutations/plan`, {
     method: 'POST',
-    body: JSON.stringify({ parameters }),
+    body: JSON.stringify({ parameters, artifacts }),
   });
 }
 
