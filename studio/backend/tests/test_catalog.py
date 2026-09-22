@@ -28,6 +28,28 @@ def test_discovers_workspace_command():
     assert specs["Raw"].type.lower() == "switch"
 
 
+
+def test_parameter_discovery_handles_brackets_inside_validate_pattern():
+    capabilities = discover_powershell_capabilities()
+    by_command = {item.command: item for item in capabilities if item.command}
+
+    eventhouse = by_command["New-FabricEventhouse"]
+    lakehouse = by_command["New-FabricLakehouse"]
+    notebook = by_command["New-FabricNotebook"]
+
+    eventhouse_specs = {spec.name: spec for spec in eventhouse.parameter_specs}
+    assert eventhouse_specs["WorkspaceId"].mandatory is True
+    assert eventhouse_specs["EventhouseName"].mandatory is True
+    assert "EventhouseName" in eventhouse.parameters
+
+    lakehouse_specs = {spec.name: spec for spec in lakehouse.parameter_specs}
+    assert lakehouse_specs["LakehouseName"].mandatory is True
+    assert lakehouse_specs["LakehouseEnableSchemas"].type.lower() == "bool"
+
+    notebook_specs = {spec.name: spec for spec in notebook.parameter_specs}
+    assert notebook_specs["NotebookName"].mandatory is True
+    assert notebook_specs["NotebookFormat"].allowed_values == ["ipynb", "fabricGitSource"]
+
 def test_classifies_remove_as_destructive_and_blocks_it():
     capabilities = discover_powershell_capabilities()
     remove_workspace = next(item for item in capabilities if item.command == "Remove-FabricWorkspace")
