@@ -200,7 +200,7 @@ def create_mutation_plan(capability_id: str, request: MutationPlanRequest | None
     item = _capability_or_404(capability_id)
     parameters = request.parameters if request else {}
     try:
-        plan = broker.create_plan(item, parameters)
+        plan = broker.create_plan(item, parameters, artifacts=(request.artifacts if request else []))
     except (UnsafeOperation, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -215,6 +215,7 @@ def create_mutation_plan(capability_id: str, request: MutationPlanRequest | None
             "source_path": item.source_path,
             "risk": item.risk,
             "parameters": parameters,
+            "artifacts": [artifact.model_dump() for artifact in plan.artifacts],
             "rendered_command": plan.rendered_command,
             "expires_at": plan.expires_at,
         }
