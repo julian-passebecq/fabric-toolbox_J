@@ -122,7 +122,7 @@ Specialized tools keep their own authentication, dependency and output lifecycle
 - [x] register guarded Eventstream definition update for an existing Eventstream
 - [ ] register definition update flows for Notebook and Data Pipeline
 - [x] execute Composer-staged plans from Change Plans with WhatIf + typed approval
-- [ ] one-click dependency-wave orchestration with explicit per-plan approvals
+- [x] one-click dependency-wave staging with explicit per-plan approvals
 - [ ] project manifest export/import
 - [ ] VS Code Fabric extension deep-link or workspace-folder handoff where supported
 - [x] Foil'o live Oracle/Kafka endpoint parameter set
