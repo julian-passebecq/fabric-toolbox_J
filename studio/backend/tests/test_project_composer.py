@@ -3,8 +3,10 @@ import json
 
 import pytest
 
-from app.models import ProjectPlanRequest
-from app.project_composer import accept_project, build_eventstream_definition, get_project_template, list_project_templates, plan_project
+from app.models import ProjectPlanRequest, SessionStatus
+from app.mutations import MutationBroker
+from app.providers.microsoftfabricmgmt import runtime
+from app.project_composer import accept_project, build_eventstream_definition, get_project_template, list_project_templates, plan_project, stage_project_wave
 
 
 def test_foilo_template_covers_rti_and_engineering_items():
@@ -468,3 +470,139 @@ def test_project_acceptance_api_returns_hashes_without_live_definition(monkeypat
     assert response.live_eventstream_sha256
     serialized = response.model_dump()
     assert "definition" not in serialized
+
+
+def test_foilo_dependency_waves_are_stable():
+    template = get_project_template("foilo-wind-rti")
+    plan = plan_project(
+        template,
+        ProjectPlanRequest(workspace_id="workspace-1", current_items=[]),
+    )
+    by_id = {action.item_id: action for action in plan.actions}
+
+    assert plan.current_wave == 1
+    assert by_id["rti-eventhouse"].deployment_wave == 1
+    assert by_id["de-lakehouse"].deployment_wave == 1
+    assert by_id["de-environment"].deployment_wave == 1
+    assert by_id["rti-kql-database"].deployment_wave == 2
+    assert by_id["de-bronze-notebook"].deployment_wave == 2
+    assert by_id["rti-eventstream"].deployment_wave == 3
+    assert by_id["rti-queryset"].deployment_wave == 3
+    assert by_id["de-silver-notebook"].deployment_wave == 3
+    assert by_id["rti-dashboard"].deployment_wave == 4
+    assert by_id["df-pipeline"].deployment_wave == 4
+
+
+def test_foilo_current_wave_advances_when_wave_one_exists():
+    template = get_project_template("foilo-wind-rti")
+    plan = plan_project(
+        template,
+        ProjectPlanRequest(
+            workspace_id="workspace-1",
+            current_items=[
+                {"id": "eh-1", "displayName": "foilo_rti", "type": "Eventhouse"},
+                {"id": "lh-1", "displayName": "foilo_lakehouse", "type": "Lakehouse"},
+                {"id": "env-1", "displayName": "foilo_spark", "type": "Environment"},
+            ],
+        ),
+    )
+
+    assert plan.current_wave == 2
+    ready = {action.item_id for action in plan.actions if action.provisioning_ready}
+    assert "rti-kql-database" in ready
+    assert "de-bronze-notebook" in ready
+
+
+def test_stage_fresh_foilo_wave_creates_guarded_plans_only(monkeypatch):
+    template = get_project_template("foilo-wind-rti")
+    local_broker = MutationBroker()
+    monkeypatch.setattr(
+        runtime,
+        "status",
+        lambda: SessionStatus(connected=True, tenant_id="tenant-a"),
+    )
+
+    result = stage_project_wave(
+        template,
+        ProjectPlanRequest(workspace_id="workspace-1", current_items=[]),
+        mutation_broker=local_broker,
+    )
+
+    assert result.status == "staged"
+    assert result.wave == 1
+    assert {entry.item_id for entry in result.staged} == {
+        "rti-eventhouse",
+        "de-lakehouse",
+        "de-environment",
+    }
+    assert result.issues == []
+    assert all(entry.confirmation_text.startswith("APPLY ") for entry in result.staged)
+    assert all(plan.status == "planned" for plan in local_broker.list())
+
+
+def test_stage_wave_blocks_when_required_project_parameter_is_missing(monkeypatch):
+    template = get_project_template("foilo-wind-rti")
+    local_broker = MutationBroker()
+    monkeypatch.setattr(
+        runtime,
+        "status",
+        lambda: SessionStatus(connected=True, tenant_id="tenant-a"),
+    )
+
+    result = stage_project_wave(
+        template,
+        ProjectPlanRequest(
+            workspace_id="workspace-1",
+            current_items=[],
+            parameters={"environment": ""},
+        ),
+        mutation_broker=local_broker,
+    )
+
+    assert result.status == "blocked"
+    assert result.staged == []
+    assert result.issues[0].item_id == "project-parameters"
+    assert "environment" in result.issues[0].detail
+    assert local_broker.list() == []
+
+
+def test_wave_three_stages_eventstream_with_bound_definition(monkeypatch):
+    template = get_project_template("foilo-wind-rti")
+    local_broker = MutationBroker()
+    monkeypatch.setattr(
+        runtime,
+        "status",
+        lambda: SessionStatus(connected=True, tenant_id="tenant-a"),
+    )
+    current = [
+        {"id": "eh-1", "displayName": "foilo_rti", "type": "Eventhouse"},
+        {"id": "db-1", "displayName": "wind_telemetry", "type": "KQLDatabase"},
+        {"id": "lh-1", "displayName": "foilo_lakehouse", "type": "Lakehouse"},
+        {"id": "env-1", "displayName": "foilo_spark", "type": "Environment"},
+        {"id": "bronze-1", "displayName": "bronze_ingestion", "type": "Notebook"},
+    ]
+
+    result = stage_project_wave(
+        template,
+        ProjectPlanRequest(workspace_id="workspace-1", current_items=current),
+        mutation_broker=local_broker,
+    )
+
+    assert result.status == "staged"
+    assert result.wave == 3
+    assert {entry.item_id for entry in result.staged} == {
+        "rti-eventstream",
+        "rti-queryset",
+        "de-silver-notebook",
+    }
+
+    eventstream_entry = next(entry for entry in result.staged if entry.item_id == "rti-eventstream")
+    assert len(eventstream_entry.artifact_sha256) == 1
+    assert len(eventstream_entry.artifact_sha256[0]) == 64
+
+    eventstream_plan = next(
+        plan for plan in local_broker.list()
+        if plan.capability_id == "ps-eventstream-new-fabriceventstream"
+    )
+    assert eventstream_plan.artifacts[0].filename == "eventstream.json"
+    assert "EventstreamPathDefinition" in eventstream_plan.parameters
