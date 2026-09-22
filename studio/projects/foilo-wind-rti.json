@@ -52,7 +52,9 @@
         "ingestionMode": "${ingestion_mode}",
         "topic": "${kafka_topic}",
         "directKafkaBootstrap": "${kafka_bootstrap_servers}",
-        "destinationDatabaseRef": "rti-kql-database"
+        "destinationDatabaseRef": "rti-kql-database",
+        "directKafkaUsername": "${kafka_username}",
+        "directKafkaPassword": "${kafka_password}"
       }
     },
     {
@@ -189,6 +191,24 @@
       "description": "Only needed when direct-kafka-source is selected. Leave empty for the default outbound Fabric endpoint design.",
       "type": "string",
       "required": false,
+      "default": ""
+    },
+    {
+      "name": "kafka_username",
+      "label": "Kafka username",
+      "description": "Optional SASL username for direct Kafka source mode.",
+      "type": "string",
+      "required": false,
+      "secret": false,
+      "default": ""
+    },
+    {
+      "name": "kafka_password",
+      "label": "Kafka password",
+      "description": "Optional SASL password for direct Kafka source mode. Composer plan responses redact this value.",
+      "type": "string",
+      "required": false,
+      "secret": true,
       "default": ""
     },
     {
