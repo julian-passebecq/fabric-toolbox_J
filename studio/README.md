@@ -66,7 +66,9 @@ These writes are executable through the guarded-write broker:
 - update workspace name/description via upstream `Update-FabricWorkspace`
 - create Eventhouse via `New-FabricEventhouse`
 - create Eventstream via `New-FabricEventstream`
+- create KQL Database via `New-FabricKQLDatabase`
 - create KQL Queryset via `New-FabricKQLQueryset`
+- create KQL Dashboard via `New-FabricKQLDashboard`
 - create Lakehouse via `New-FabricLakehouse`
 - create Notebook via `New-FabricNotebook`
 - create Environment via `New-FabricEnvironment`
@@ -74,7 +76,7 @@ These writes are executable through the guarded-write broker:
 
 Every item create uses upstream `SupportsShouldProcess` / `-WhatIf`, an expiring tenant-bound Studio plan, exact typed approval, and a name-based read-back through the matching upstream `Get-Fabric*` cmdlet.
 
-KQL Database remains gated until Composer resolves its required parent Eventhouse ID in dependency order. KQL Dashboard remains gated because the current upstream management module has read coverage but no matching create cmdlet. Role changes, capacity assignment, other item lifecycle writes, job cancellation/retry, schedule writes, Git writes and destructive operations remain blocked until reviewed.
+For KQL Database, Composer resolves the existing parent Eventhouse item ID and passes it explicitly as `parentEventhouseId` before a create can be staged. Composer stages only dependency-ready resources; it never bypasses the guarded-write broker. Role changes, capacity assignment, other item lifecycle writes, job cancellation/retry, schedule writes, Git writes and destructive operations remain blocked until reviewed.
 
 ## Primary execution hierarchy
 
@@ -108,15 +110,17 @@ A feature record should make it possible to answer:
 2. Connect to a Fabric tenant with the tenant ID.
 3. Open **Project Composer** to inspect a reviewed architecture template. The Foil'o Wind RTI template is the first built-in project.
 4. For a new project, create a plan without selecting a workspace. For an existing project, select a workspace and let Composer diff desired items against live Fabric inventory.
-5. Project Composer is currently plan-only: it reports create / unchanged / conflict / unmanaged states and never deletes unmanaged items.
-6. Open **Workspaces** and refresh the live inventory.
-7. Select **Use workspace** on a workspace card. Recent workspace choices are remembered locally per tenant without credentials.
-8. Open **Items**. The selected workspace ID is injected automatically; select **Use item** once to establish item context.
-9. Item details, connections, runs and schedules inherit `workspaceId` and `itemId`. Changing workspace invalidates the selected item so an item ID cannot leak across workspace context.
-10. Operation pages show inherited parameters explicitly and identify mandatory parameters that still need operator input, such as `jobType`.
-11. Preview generated PowerShell/REST execution when desired. Read operations can execute directly; allowlisted writes use Change Plans and the guarded-write broker.
-12. Inspect results as a sortable/filterable table or raw JSON. Export JSON or CSV as appropriate.
-13. Use **Change Plans**, **Activity Log**, **Sources** and **Diagnostics** to inspect approvals, execution history, provenance and runtime/compatibility health.
+5. Composer reports create / unchanged / conflict / unmanaged states and never deletes unmanaged items.
+6. With a target workspace selected, Composer marks only dependency-ready creates as **Ready to stage**. Stage those resources into **Change Plans**; staging does not execute a Fabric mutation.
+7. In **Change Plans**, run upstream `-WhatIf`, review the exact command, type the plan confirmation and execute the selected plans.
+8. Refresh Composer after each successful wave. Newly created dependencies unlock the next wave (for example Eventhouse -> KQL Database -> Eventstream/query/dashboard).
+9. Open **Workspaces** and refresh the live inventory whenever workspace context needs to change.
+10. Select **Use workspace** on a workspace card. Recent workspace choices are remembered locally per tenant without credentials.
+11. Open **Items**. The selected workspace ID is injected automatically; select **Use item** once to establish item context.
+12. Item details, connections, runs and schedules inherit `workspaceId` and `itemId`. Changing workspace invalidates the selected item so an item ID cannot leak across workspace context.
+13. Operation pages show inherited parameters explicitly and identify mandatory context still requiring operator input.
+14. Inspect results as a sortable/filterable table or raw JSON. Export JSON or CSV as appropriate.
+15. Use **Change Plans**, **Activity Log**, **Sources** and **Diagnostics** to inspect approvals, execution history, provenance and runtime/compatibility health.
 
 ## Local Windows launch
 
