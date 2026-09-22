@@ -1,5 +1,16 @@
 # Studio changelog
 
+## 0.17.0
+
+- Added a portable Microsoft Fabric VS Code handoff bundle generated directly from Project Composer.
+- The ZIP contains the safe Fabric project manifest, workspace context, authoring-item metadata, a `.code-workspace` file, extension recommendations, `.vscode/mcp.json` and operator instructions.
+- Recommends the current Microsoft Fabric extension (`fabric.vscode-fabric`), Microsoft Fabric MCP Server extension (`fabric.vscode-fabric-mcp-server`) and GitHub Copilot Chat.
+- Configures the documented remote Fabric Core MCP endpoint in workspace-scoped `.vscode/mcp.json`.
+- The handoff instructs operators to sign in with **Fabric: Sign in** and select the target workspace in Fabric Explorer, then use VFS mode or the extension's Git-enabled workspace workflow.
+- Studio deliberately does not generate an undocumented workspace-by-ID VS Code URI; Microsoft does not currently publish a stable arbitrary-workspace deep-link contract.
+- Handoff ZIPs are generated in memory and contain no project secret values, access tokens, credentials, Change Plan confirmation text or reusable mutation plans.
+- Added regression coverage for extension/MCP configuration, workspace metadata, ZIP structure and secret non-disclosure.
+
 ## 0.16.0
 
 - Added portable Project Composer manifest export/import with a versioned schema.

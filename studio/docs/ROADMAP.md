@@ -124,7 +124,7 @@ Specialized tools keep their own authentication, dependency and output lifecycle
 - [x] execute Composer-staged plans from Change Plans with WhatIf + typed approval
 - [x] one-click dependency-wave staging with explicit per-plan approvals
 - [x] project manifest export/import
-- [ ] VS Code Fabric extension deep-link or workspace-folder handoff where supported
+- [x] VS Code Fabric extension workspace-folder handoff; deep-link omitted until Microsoft documents a stable workspace URI
 - [x] Foil'o live Oracle/Kafka endpoint parameter set
 - [x] Foil'o Eventstream -> Eventhouse/KQL -> Lakehouse deployment acceptance test
 
