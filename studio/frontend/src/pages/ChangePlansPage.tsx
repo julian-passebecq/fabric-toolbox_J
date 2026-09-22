@@ -12,7 +12,14 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityRecord, MutationPlan, getActivity, getMutationPlans } from '../api/client';
+import {
+  ActivityRecord,
+  MutationPlan,
+  executeMutation,
+  getActivity,
+  getMutationPlans,
+  validateMutation,
+} from '../api/client';
 
 const useStyles = makeStyles({
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', marginBottom: '18px' },
@@ -49,6 +56,8 @@ export function ChangePlansPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
+  const [confirmations, setConfirmations] = useState<Record<string, string>>({});
+  const [busyPlanId, setBusyPlanId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -65,6 +74,42 @@ export function ChangePlansPage() {
   }
 
   useEffect(() => { void load(); }, []);
+
+  async function validatePlan(plan: MutationPlan) {
+    setBusyPlanId(plan.plan_id);
+    setError('');
+    try {
+      const response = await validateMutation(plan.plan_id);
+      setPlans((current) => current.map((item) => (
+        item.plan_id === plan.plan_id ? response.plan : item
+      )));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyPlanId(null);
+    }
+  }
+
+  async function executePlan(plan: MutationPlan) {
+    setBusyPlanId(plan.plan_id);
+    setError('');
+    try {
+      const response = await executeMutation(
+        plan.plan_id,
+        confirmations[plan.plan_id] ?? '',
+      );
+      setPlans((current) => current.map((item) => (
+        item.plan_id === plan.plan_id ? response.plan : item
+      )));
+      const activity = await getActivity(500);
+      setHistory(mutationHistory(activity));
+      setConfirmations((current) => ({ ...current, [plan.plan_id]: '' }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyPlanId(null);
+    }
+  }
 
   const filteredHistory = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -98,12 +143,56 @@ export function ChangePlansPage() {
               <Badge appearance="outline">{plan.risk.toUpperCase()}</Badge>
               <Badge appearance="outline">Tenant-bound</Badge>
               {plan.supports_validation && <Badge appearance="tint">WHATIF</Badge>}
+              {plan.artifacts.length > 0 && <Badge appearance="tint">CONTENT-BOUND ARTIFACT</Badge>}
             </div>
             <Text block size={200}>Tenant: {plan.tenant_id}</Text>
             <Text block size={200}>Created: {new Date(plan.created_at).toLocaleString()}</Text>
             <Text block size={200}>Expires: {new Date(plan.expires_at).toLocaleString()}</Text>
             <Text block size={200} className={styles.muted}>Digest: {plan.digest}</Text>
+            {plan.artifacts.map((artifact) => (
+              <Text block size={200} className={styles.muted} key={artifact.parameter}>
+                {artifact.filename} · SHA-256 {artifact.sha256.slice(0, 16)}… · {artifact.size_bytes} bytes
+              </Text>
+            ))}
             <code className={styles.code}>{plan.rendered_command}</code>
+            {['planned', 'validated'].includes(plan.status) && (
+              <div className={styles.toolbar}>
+                {plan.supports_validation && (
+                  <Button
+                    disabled={busyPlanId === plan.plan_id}
+                    onClick={() => void validatePlan(plan)}
+                  >
+                    {busyPlanId === plan.plan_id
+                      ? 'Working…'
+                      : plan.status === 'validated'
+                        ? 'Run -WhatIf again'
+                        : 'Validate with -WhatIf'}
+                  </Button>
+                )}
+                {plan.status === 'validated' && (
+                  <>
+                    <Input
+                      placeholder={`Type ${plan.confirmation_text}`}
+                      value={confirmations[plan.plan_id] ?? ''}
+                      onChange={(_, data) => setConfirmations((current) => ({
+                        ...current,
+                        [plan.plan_id]: data.value,
+                      }))}
+                    />
+                    <Button
+                      appearance="primary"
+                      disabled={
+                        busyPlanId === plan.plan_id
+                        || (confirmations[plan.plan_id] ?? '') !== plan.confirmation_text
+                      }
+                      onClick={() => void executePlan(plan)}
+                    >
+                      {busyPlanId === plan.plan_id ? 'Applying…' : 'Apply guarded write'}
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
           </Card>
         ))}
       </div>
