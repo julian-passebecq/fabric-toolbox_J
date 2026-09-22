@@ -269,9 +269,9 @@ export type ProjectAcceptanceReport = {
   status: 'pass' | 'fail';
   accepted: boolean;
   checks: ProjectAcceptanceCheck[];
-  desired_eventstream_sha256?: string;
-  live_eventstream_sha256?: string;
-  definition_match?: boolean;
+  desired_eventstream_sha256?: string | null;
+  live_eventstream_sha256?: string | null;
+  definition_match?: boolean | null;
 };
 
 export type EventstreamDefinitionArtifact = {
