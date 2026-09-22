@@ -154,3 +154,24 @@ def test_guarded_item_create_cannot_plan_without_mandatory_fields(monkeypatch):
 
     with pytest.raises(ValueError, match="EventstreamName"):
         broker.create_plan(create, {"WorkspaceId": "ws-1"})
+
+
+def test_guarded_kql_database_plan_preserves_parent_eventhouse_binding(monkeypatch):
+    broker = MutationBroker()
+    monkeypatch.setattr(runtime, "status", lambda: _connected())
+
+    create = next(item for item in combined_catalog() if item.command == "New-FabricKQLDatabase")
+    plan = broker.create_plan(
+        create,
+        {
+            "WorkspaceId": "ws-1",
+            "KQLDatabaseName": "wind_telemetry",
+            "KQLDatabaseType": "ReadWrite",
+            "parentEventhouseId": "eventhouse-1",
+        },
+    )
+
+    assert plan.supports_validation is True
+    assert "-parentEventhouseId 'eventhouse-1'" in plan.rendered_command
+    assert "-KQLDatabaseType 'ReadWrite'" in plan.rendered_command
+    assert "-WhatIf" in (plan.validation_command or "")
