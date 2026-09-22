@@ -374,6 +374,7 @@ def build_eventstream_definition(template: ProjectTemplate, request: ProjectPlan
         raise ValueError("Project template must declare Eventstream, Eventhouse and KQLDatabase items")
 
     existing_eventhouse = by_name_type.get((eventhouse.display_name.casefold(), "eventhouse"))
+    existing_database = by_name_type.get((database.display_name.casefold(), "kqldatabase"))
     eventhouse_id = _actual_id(existing_eventhouse)
 
     mode = str(resolved_parameters.get("ingestion_mode") or "fabric-kafka-endpoint")
@@ -387,6 +388,8 @@ def build_eventstream_definition(template: ProjectTemplate, request: ProjectPlan
         missing_requirements.append("workspace_id")
     if not eventhouse_id:
         missing_requirements.append("eventhouse_item_id")
+    if not existing_database:
+        missing_requirements.append("kql_database_item")
     if mode == "direct-kafka-source" and not connection_id:
         missing_requirements.append("kafka_connection_id")
 
