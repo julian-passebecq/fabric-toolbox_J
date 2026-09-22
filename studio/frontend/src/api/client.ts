@@ -234,6 +234,7 @@ export type ProjectPlanAction = {
   reconciliation_parameters: Record<string, unknown>;
   reconciliation_ready: boolean;
   reconciliation_reason: string;
+  deployment_wave?: number | null;
 };
 
 export type ProjectPlan = {
@@ -247,10 +248,39 @@ export type ProjectPlan = {
   counts: Record<string, number>;
   resolved_parameters: Record<string, unknown>;
   missing_parameters: string[];
+  current_wave?: number | null;
   apply_supported: boolean;
   apply_note: string;
 };
 
+
+export type ProjectWaveStageEntry = {
+  item_id: string;
+  display_name: string;
+  item_type: string;
+  deployment_wave: number;
+  capability_id: string;
+  plan_id: string;
+  confirmation_text: string;
+  artifact_sha256: string[];
+};
+
+export type ProjectWaveStageIssue = {
+  item_id: string;
+  display_name: string;
+  detail: string;
+};
+
+export type ProjectWaveStageResult = {
+  template_id: string;
+  project_name: string;
+  workspace_id: string;
+  wave?: number | null;
+  status: 'staged' | 'partial' | 'blocked' | 'complete';
+  staged: ProjectWaveStageEntry[];
+  issues: ProjectWaveStageIssue[];
+  note: string;
+};
 
 export type ProjectAcceptanceCheck = {
   id: string;
@@ -426,6 +456,21 @@ export function runProjectAcceptance(
 ) {
   return request<ProjectAcceptanceReport>(
     `/api/projects/templates/${encodeURIComponent(templateId)}/acceptance`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ workspace_id: workspaceId, parameters }),
+    },
+  );
+}
+
+
+export function stageProjectWave(
+  templateId: string,
+  workspaceId: string,
+  parameters: Record<string, unknown> = {},
+) {
+  return request<ProjectWaveStageResult>(
+    `/api/projects/templates/${encodeURIComponent(templateId)}/waves/stage`,
     {
       method: 'POST',
       body: JSON.stringify({ workspace_id: workspaceId, parameters }),
