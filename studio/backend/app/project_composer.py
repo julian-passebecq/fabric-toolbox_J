@@ -95,6 +95,139 @@ def _resolve_parameters(template: ProjectTemplate, supplied: dict[str, Any]) -> 
     return resolved, missing
 
 
+PROVISIONERS: dict[str, dict[str, str]] = {
+    "Eventhouse": {
+        "capability_id": "ps-eventhouse-new-fabriceventhouse",
+        "name_parameter": "EventhouseName",
+        "description_parameter": "EventhouseDescription",
+    },
+    "Eventstream": {
+        "capability_id": "ps-eventstream-new-fabriceventstream",
+        "name_parameter": "EventstreamName",
+        "description_parameter": "EventstreamDescription",
+    },
+    "KQLDatabase": {
+        "capability_id": "ps-kql-database-new-fabrickqldatabase",
+        "name_parameter": "KQLDatabaseName",
+        "description_parameter": "KQLDatabaseDescription",
+    },
+    "KQLQueryset": {
+        "capability_id": "ps-kql-queryset-new-fabrickqlqueryset",
+        "name_parameter": "KQLQuerysetName",
+        "description_parameter": "KQLQuerysetDescription",
+    },
+    "KQLDashboard": {
+        "capability_id": "ps-kql-dashboard-new-fabrickqldashboard",
+        "name_parameter": "KQLDashboardName",
+        "description_parameter": "KQLDashboardDescription",
+    },
+    "Lakehouse": {
+        "capability_id": "ps-lakehouse-new-fabriclakehouse",
+        "name_parameter": "LakehouseName",
+        "description_parameter": "LakehouseDescription",
+    },
+    "Notebook": {
+        "capability_id": "ps-notebook-new-fabricnotebook",
+        "name_parameter": "NotebookName",
+        "description_parameter": "NotebookDescription",
+    },
+    "Environment": {
+        "capability_id": "ps-environment-new-fabricenvironment",
+        "name_parameter": "EnvironmentName",
+        "description_parameter": "EnvironmentDescription",
+    },
+    "DataPipeline": {
+        "capability_id": "ps-data-pipeline-new-fabricdatapipeline",
+        "name_parameter": "DataPipelineName",
+        "description_parameter": "DataPipelineDescription",
+    },
+}
+
+
+def _actual_id(item: dict[str, Any] | None) -> str:
+    if not item:
+        return ""
+    for key in ("id", "Id", "itemId", "ItemId"):
+        value = item.get(key)
+        if value not in (None, ""):
+            return str(value)
+    return ""
+
+
+def _provisioning_for(
+    desired,
+    action: str,
+    request: ProjectPlanRequest,
+    existing_by_template_id: dict[str, dict[str, Any]],
+    catalog_by_id: dict[str, Any],
+) -> tuple[str | None, dict[str, Any], bool, str]:
+    if action != "create":
+        if action == "unchanged":
+            return None, {}, False, "The item already exists; no create plan is needed."
+        if action == "conflict":
+            return None, {}, False, "Resolve the display-name/type conflict before provisioning."
+        return None, {}, False, "Unmanaged workspace items are never provisioned by this template."
+
+    provisioner = PROVISIONERS.get(desired.type)
+    if not provisioner:
+        return None, {}, False, f"No reviewed guarded create capability is registered for {desired.type}."
+
+    capability_id = provisioner["capability_id"]
+    capability = catalog_by_id.get(capability_id)
+    if not capability or capability.execution_policy != "guarded-write":
+        return capability_id, {}, False, "The required create capability is not currently guarded-write enabled."
+
+    if not request.workspace_id:
+        return capability_id, {}, False, "Create or select the target workspace before staging item creates."
+
+    missing_dependencies = [dependency for dependency in desired.depends_on if dependency not in existing_by_template_id]
+    if missing_dependencies:
+        return (
+            capability_id,
+            {},
+            False,
+            "Create and verify dependencies first, then refresh the project plan: "
+            + ", ".join(missing_dependencies),
+        )
+
+    parameters: dict[str, Any] = {
+        "WorkspaceId": request.workspace_id,
+        provisioner["name_parameter"]: desired.display_name,
+    }
+    if desired.description:
+        parameters[provisioner["description_parameter"]] = desired.description[:256]
+
+    if desired.type == "KQLDatabase":
+        parent_ref = str(desired.settings.get("parentEventhouseRef") or "")
+        if not parent_ref:
+            parent_ref = next(
+                (
+                    dependency
+                    for dependency in desired.depends_on
+                    if dependency in existing_by_template_id
+                    and _actual_type(existing_by_template_id[dependency]).casefold() == "eventhouse"
+                ),
+                "",
+            )
+        parent_id = _actual_id(existing_by_template_id.get(parent_ref)) if parent_ref else ""
+        if not parent_id:
+            return (
+                capability_id,
+                {},
+                False,
+                "The parent Eventhouse exists logically but its Fabric item ID could not be resolved.",
+            )
+        parameters["parentEventhouseId"] = parent_id
+        parameters["KQLDatabaseType"] = str(desired.settings.get("databaseType") or "ReadWrite")
+
+    return (
+        capability_id,
+        parameters,
+        True,
+        "Ready to stage as a guarded mutation plan. Execution still requires -WhatIf validation and typed approval.",
+    )
+
+
 def plan_project(template: ProjectTemplate, request: ProjectPlanRequest) -> ProjectPlan:
     resolved_parameters, missing_parameters = _resolve_parameters(template, request.parameters)
     current_items = request.current_items
@@ -117,13 +250,15 @@ def plan_project(template: ProjectTemplate, request: ProjectPlanRequest) -> Proj
         by_name_type[(name.casefold(), item_type.casefold())] = item
         by_name.setdefault(name.casefold(), []).append(item)
 
-    actions: list[ProjectPlanAction] = []
+    desired_status: list[tuple[Any, str, str, dict[str, Any] | None]] = []
+    existing_by_template_id: dict[str, dict[str, Any]] = {}
     matched_actual_ids: set[int] = set()
 
     for desired in template.items:
         exact = by_name_type.get((desired.display_name.casefold(), desired.type.casefold()))
         if exact is not None:
             matched_actual_ids.add(id(exact))
+            existing_by_template_id[desired.id] = exact
             action = "unchanged"
             reason = "An item with the same display name and Fabric item type already exists."
         else:
@@ -137,7 +272,18 @@ def plan_project(template: ProjectTemplate, request: ProjectPlanRequest) -> Proj
             else:
                 action = "create"
                 reason = "The desired item is missing from the selected workspace."
+        desired_status.append((desired, action, reason, exact))
 
+    catalog_by_id = {item.id: item for item in combined_catalog()}
+    actions: list[ProjectPlanAction] = []
+    for desired, action, reason, _ in desired_status:
+        capability_id, provisioning_parameters, provisioning_ready, provisioning_reason = _provisioning_for(
+            desired,
+            action,
+            request,
+            existing_by_template_id,
+            catalog_by_id,
+        )
         actions.append(
             ProjectPlanAction(
                 item_id=desired.id,
@@ -148,6 +294,10 @@ def plan_project(template: ProjectTemplate, request: ProjectPlanRequest) -> Proj
                 reason=reason,
                 depends_on=desired.depends_on,
                 vscode_handoff=desired.vscode_handoff,
+                provisioning_capability_id=capability_id,
+                provisioning_parameters=provisioning_parameters,
+                provisioning_ready=provisioning_ready,
+                provisioning_reason=provisioning_reason,
             )
         )
 
@@ -164,10 +314,12 @@ def plan_project(template: ProjectTemplate, request: ProjectPlanRequest) -> Proj
                 area="Existing workspace",
                 action="unmanaged",
                 reason="Existing Fabric item is outside this project template; Composer will not delete or modify it.",
+                provisioning_reason="Unmanaged workspace items are preserved and never changed by Composer.",
             )
         )
 
     counts = Counter(action.action for action in actions)
+    ready_count = sum(1 for action in actions if action.provisioning_ready)
     return ProjectPlan(
         template_id=template.id,
         project_name=template.name,
@@ -186,7 +338,11 @@ def plan_project(template: ProjectTemplate, request: ProjectPlanRequest) -> Proj
             else ""
         )
         + (
-            "Project Composer is plan-only in this milestone. Item creation remains blocked until each "
-            "Fabric create path is registered with the guarded-write broker and verification strategy."
+            f"{ready_count} create action(s) are ready to stage as guarded mutation plans. "
+            "Composer stages only resources whose dependencies already exist in Fabric; execute each staged plan "
+            "through Change Plans with upstream -WhatIf validation and typed approval, then refresh Composer for the next wave."
+            if ready_count
+            else
+            "No create action is dependency-ready yet. Create/select the workspace or execute the previous dependency wave, then refresh the plan."
         ),
     )
