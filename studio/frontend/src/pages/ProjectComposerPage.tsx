@@ -23,6 +23,7 @@ import {
   ProjectPlanAction,
   ProjectTemplate,
   createMutationPlan,
+  downloadVsCodeHandoff,
   exportProjectManifest,
   getEventstreamDefinitionArtifact,
   getProjectItemDefinitionArtifact,
@@ -82,6 +83,7 @@ export function ProjectComposerPage({ connected, workspaceContext, onUseWorkspac
   const [acceptanceLoading, setAcceptanceLoading] = useState(false);
   const [pendingManifestImport, setPendingManifestImport] = useState<ProjectManifestImportResult | null>(null);
   const [manifestNotice, setManifestNotice] = useState('');
+  const [vscodeHandoffLoading, setVsCodeHandoffLoading] = useState(false);
   const manifestInputRef = useRef<HTMLInputElement | null>(null);
   const [error, setError] = useState('');
 
@@ -395,6 +397,35 @@ export function ProjectComposerPage({ connected, workspaceContext, onUseWorkspac
     }
   }
 
+  async function handleVsCodeHandoff() {
+    if (!template) return;
+    setVsCodeHandoffLoading(true);
+    setError('');
+    try {
+      const bundle = await downloadVsCodeHandoff(
+        template.id,
+        workspaceContext?.id,
+        workspaceContext?.name,
+        parameterValues,
+      );
+      const url = URL.createObjectURL(bundle.blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = bundle.filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setManifestNotice(
+        'VS Code bundle exported. It contains no credentials, secret parameter values or Change Plan approvals.',
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setVsCodeHandoffLoading(false);
+    }
+  }
+
   async function handleExportManifest() {
     if (!template) return;
     setError('');
@@ -483,7 +514,10 @@ export function ProjectComposerPage({ connected, workspaceContext, onUseWorkspac
           <Button appearance="primary" disabled={planning || !canLivePlan} onClick={handlePlan}>
             {planning ? 'Planning…' : workspaceContext ? 'Plan against selected workspace' : 'Plan new workspace'}
           </Button>
-          <Button appearance="secondary" onClick={copyVsCodeHandoff}>Copy VS Code handoff</Button>
+          <Button appearance="secondary" onClick={copyVsCodeHandoff}>Copy VS Code context</Button>
+          <Button appearance="secondary" disabled={vscodeHandoffLoading} onClick={handleVsCodeHandoff}>
+            {vscodeHandoffLoading ? 'Building VS Code bundle…' : 'Download VS Code bundle'}
+          </Button>
           <Button appearance="secondary" onClick={handleExportManifest}>Export manifest</Button>
           <Button appearance="secondary" onClick={() => manifestInputRef.current?.click()}>Import manifest</Button>
           <input
