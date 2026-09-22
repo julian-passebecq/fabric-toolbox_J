@@ -1,5 +1,15 @@
 # Studio changelog
 
+## 0.16.0
+
+- Added portable Project Composer manifest export/import with a versioned schema.
+- Manifests capture the registered template ID/version/hash, desired item graph, workspace target and non-secret project parameters.
+- Secret parameter values are always omitted on export and ignored on import, even when a manifest is manually edited.
+- Added deterministic current-template SHA-256 and import warnings for template version, content or desired-item-graph drift.
+- Manifest import restores Composer parameters and the shared Studio workspace context only; it never restores credentials, Change Plans, approval text or mutation authority.
+- Added JSON download/upload controls to Project Composer and safe import notices for omitted secrets or stale template content.
+- Added backend regression coverage for secret non-disclosure, safe round-trips, malicious secret injection, drift warnings and invalid parameter rejection.
+
 ## 0.15.0
 
 - Added reviewed read/update definition capabilities for Fabric Notebooks and Data Pipelines through the upstream MicrosoftFabricMgmt module.

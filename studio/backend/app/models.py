@@ -85,6 +85,37 @@ class ProjectTemplate(BaseModel):
     items: list[ProjectItem] = Field(default_factory=list)
 
 
+class ProjectManifestExportRequest(BaseModel):
+    workspace_id: str | None = None
+    workspace_name: str | None = None
+    parameters: dict[str, Any] = Field(default_factory=dict)
+
+
+class ProjectManifest(BaseModel):
+    schema_version: Literal[1] = 1
+    template_id: str
+    template_version: str
+    template_sha256: str
+    project_name: str
+    workspace_id: str | None = None
+    workspace_name: str
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    secret_parameters: list[str] = Field(default_factory=list)
+    missing_parameters: list[str] = Field(default_factory=list)
+    items: list[ProjectItem] = Field(default_factory=list)
+
+
+class ProjectManifestImportResult(BaseModel):
+    template_id: str
+    imported_template_version: str
+    current_template_version: str
+    workspace_id: str | None = None
+    workspace_name: str
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    secret_parameters: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class ProjectPlanRequest(BaseModel):
     workspace_id: str | None = None
     current_items: list[dict[str, Any]] | None = None

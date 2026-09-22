@@ -12,6 +12,9 @@ from .catalog import combined_catalog
 from .models import (
     ProjectAcceptanceCheck,
     ProjectAcceptanceReport,
+    ProjectManifest,
+    ProjectManifestExportRequest,
+    ProjectManifestImportResult,
     ProjectPlan,
     ProjectPlanAction,
     ProjectPlanRequest,
@@ -42,6 +45,109 @@ def get_project_template(template_id: str) -> ProjectTemplate:
             return template
     raise ValueError(f"Project template not found: {template_id}")
 
+
+
+def _template_sha256(template: ProjectTemplate) -> str:
+    payload = json.dumps(
+        template.model_dump(),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def export_project_manifest(
+    template: ProjectTemplate,
+    request: ProjectManifestExportRequest,
+) -> ProjectManifest:
+    _, missing_parameters = _resolve_parameters(template, request.parameters)
+    specs = {parameter.name: parameter for parameter in template.parameters}
+
+    safe_parameters: dict[str, Any] = {}
+    secret_parameters: list[str] = []
+    for name, spec in specs.items():
+        value = request.parameters.get(name, spec.default)
+        if spec.secret:
+            safe_parameters[name] = None
+            secret_parameters.append(name)
+        else:
+            safe_parameters[name] = value
+
+    return ProjectManifest(
+        template_id=template.id,
+        template_version=template.version,
+        template_sha256=_template_sha256(template),
+        project_name=template.name,
+        workspace_id=request.workspace_id,
+        workspace_name=request.workspace_name or template.workspace_name,
+        parameters=safe_parameters,
+        secret_parameters=sorted(secret_parameters),
+        missing_parameters=missing_parameters,
+        items=template.items,
+    )
+
+
+def import_project_manifest(manifest: ProjectManifest) -> ProjectManifestImportResult:
+    template = get_project_template(manifest.template_id)
+    warnings: list[str] = []
+
+    current_sha = _template_sha256(template)
+    if manifest.template_version != template.version:
+        warnings.append(
+            f"Template version differs: manifest={manifest.template_version}, current={template.version}."
+        )
+    if manifest.template_sha256 != current_sha:
+        warnings.append("Template content differs from the current registered template.")
+
+    current_items = {(item.id, item.type, item.display_name) for item in template.items}
+    imported_items = {(item.id, item.type, item.display_name) for item in manifest.items}
+    if current_items != imported_items:
+        warnings.append("Manifest desired item graph differs from the current template.")
+
+    specs = {parameter.name: parameter for parameter in template.parameters}
+    unknown = sorted(set(manifest.parameters) - set(specs))
+    if unknown:
+        raise ValueError("Unknown manifest parameters: " + ", ".join(unknown))
+
+    parameters: dict[str, Any] = {}
+    secret_parameters: list[str] = []
+    missing_parameters: list[str] = []
+
+    for name, spec in specs.items():
+        imported_value = manifest.parameters.get(name, spec.default)
+        if spec.secret:
+            secret_parameters.append(name)
+            if imported_value not in (None, "", "***", "***REDACTED***"):
+                warnings.append(f"Secret parameter '{name}' was ignored during import.")
+            parameters[name] = spec.default if spec.default is not None else ""
+            continue
+
+        if spec.allowed_values and imported_value not in (None, "") and str(imported_value) not in spec.allowed_values:
+            allowed = ", ".join(spec.allowed_values)
+            raise ValueError(f"Invalid value for {name}; allowed values: {allowed}")
+
+        parameters[name] = imported_value
+        if spec.required and imported_value in (None, ""):
+            missing_parameters.append(name)
+
+    if missing_parameters:
+        warnings.append(
+            "Imported manifest is incomplete; required parameters still missing: "
+            + ", ".join(missing_parameters)
+            + "."
+        )
+
+    return ProjectManifestImportResult(
+        template_id=template.id,
+        imported_template_version=manifest.template_version,
+        current_template_version=template.version,
+        workspace_id=manifest.workspace_id,
+        workspace_name=manifest.workspace_name or template.workspace_name,
+        parameters=parameters,
+        secret_parameters=sorted(secret_parameters),
+        warnings=warnings,
+    )
 
 def _items_capability():
     return next(item for item in combined_catalog() if item.id == "rest-items-list")

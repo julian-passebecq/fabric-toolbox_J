@@ -217,6 +217,32 @@ export type ProjectTemplate = {
   items: ProjectItem[];
 };
 
+
+export type ProjectManifest = {
+  schema_version: 1;
+  template_id: string;
+  template_version: string;
+  template_sha256: string;
+  project_name: string;
+  workspace_id?: string | null;
+  workspace_name: string;
+  parameters: Record<string, unknown>;
+  secret_parameters: string[];
+  missing_parameters: string[];
+  items: ProjectItem[];
+};
+
+export type ProjectManifestImportResult = {
+  template_id: string;
+  imported_template_version: string;
+  current_template_version: string;
+  workspace_id?: string | null;
+  workspace_name: string;
+  parameters: Record<string, unknown>;
+  secret_parameters: string[];
+  warnings: string[];
+};
+
 export type ProjectPlanAction = {
   item_id: string;
   display_name: string;
@@ -411,6 +437,33 @@ export function getProjectTemplates() {
 export function getProjectTemplate(templateId: string) {
   return request<ProjectTemplate>(`/api/projects/templates/${encodeURIComponent(templateId)}`);
 }
+
+export function exportProjectManifest(
+  templateId: string,
+  workspaceId?: string,
+  workspaceName?: string,
+  parameters: Record<string, unknown> = {},
+) {
+  return request<ProjectManifest>(
+    `/api/projects/templates/${encodeURIComponent(templateId)}/manifest`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        ...(workspaceId ? { workspace_id: workspaceId } : {}),
+        ...(workspaceName ? { workspace_name: workspaceName } : {}),
+        parameters,
+      }),
+    },
+  );
+}
+
+export function importProjectManifest(manifest: ProjectManifest) {
+  return request<ProjectManifestImportResult>('/api/projects/manifest/import', {
+    method: 'POST',
+    body: JSON.stringify(manifest),
+  });
+}
+
 
 export function planProject(
   templateId: string,

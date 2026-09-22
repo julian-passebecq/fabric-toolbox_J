@@ -15,13 +15,16 @@ from .models import (
     MutationValidationResult,
     PreviewRequest,
     ProjectAcceptanceReport,
+    ProjectManifest,
+    ProjectManifestExportRequest,
+    ProjectManifestImportResult,
     ProjectPlan,
     ProjectPlanRequest,
     ProjectTemplate,
     SessionStatus,
 )
 from .mutations import broker
-from .project_composer import accept_project, build_eventstream_definition, build_project_item_definition_artifact, get_project_template, list_project_templates, plan_project
+from .project_composer import accept_project, build_eventstream_definition, build_project_item_definition_artifact, export_project_manifest, get_project_template, import_project_manifest, list_project_templates, plan_project
 from .providers.fabric_rest import build_rest_get_command, execute_rest_read
 from .providers.microsoftfabricmgmt import (
     ProviderUnavailable,
@@ -35,7 +38,7 @@ from .specialized_tools import list_specialized_tools
 
 app = FastAPI(
     title="Fabric Ops Studio API",
-    version="0.15.0",
+    version="0.16.0",
     description="Fabric operations and declarative project-composition layer with guarded execution.",
 )
 
@@ -301,6 +304,62 @@ def project_template(template_id: str) -> ProjectTemplate:
         return get_project_template(template_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/projects/templates/{template_id}/manifest", response_model=ProjectManifest)
+def project_manifest_export(
+    template_id: str,
+    request: ProjectManifestExportRequest | None = None,
+) -> ProjectManifest:
+    try:
+        template = get_project_template(template_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    try:
+        manifest = export_project_manifest(
+            template,
+            request or ProjectManifestExportRequest(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    append_activity(
+        {
+            "action": "project.manifest.export",
+            "template_id": manifest.template_id,
+            "template_version": manifest.template_version,
+            "template_sha256": manifest.template_sha256,
+            "workspace_id": manifest.workspace_id,
+            "workspace_name": manifest.workspace_name,
+            "secret_parameters": manifest.secret_parameters,
+            "missing_parameters": manifest.missing_parameters,
+            "item_count": len(manifest.items),
+        }
+    )
+    return manifest
+
+
+@app.post("/api/projects/manifest/import", response_model=ProjectManifestImportResult)
+def project_manifest_import(manifest: ProjectManifest) -> ProjectManifestImportResult:
+    try:
+        result = import_project_manifest(manifest)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    append_activity(
+        {
+            "action": "project.manifest.import",
+            "template_id": result.template_id,
+            "imported_template_version": result.imported_template_version,
+            "current_template_version": result.current_template_version,
+            "workspace_id": result.workspace_id,
+            "workspace_name": result.workspace_name,
+            "secret_parameters": result.secret_parameters,
+            "warnings": result.warnings,
+        }
+    )
+    return result
 
 
 @app.post("/api/projects/templates/{template_id}/plan", response_model=ProjectPlan)

@@ -12,18 +12,22 @@ import {
   makeStyles,
   tokens,
 } from '@fluentui/react-components';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   EventstreamDefinitionArtifact,
   MutationArtifactInput,
   ProjectAcceptanceReport,
+  ProjectManifest,
+  ProjectManifestImportResult,
   ProjectPlan,
   ProjectPlanAction,
   ProjectTemplate,
   createMutationPlan,
+  exportProjectManifest,
   getEventstreamDefinitionArtifact,
   getProjectItemDefinitionArtifact,
   getProjectTemplates,
+  importProjectManifest,
   planProject,
   runProjectAcceptance,
 } from '../api/client';
@@ -33,6 +37,7 @@ type WorkspaceContext = { id: string; name: string };
 type Props = {
   connected: boolean;
   workspaceContext: WorkspaceContext | null;
+  onUseWorkspace: (workspace: WorkspaceContext) => void;
   onOpenChangePlans: () => void;
 };
 
@@ -60,7 +65,7 @@ function acceptanceAppearance(status: 'pass' | 'fail' | 'warning') {
   return 'outline';
 }
 
-export function ProjectComposerPage({ connected, workspaceContext, onOpenChangePlans }: Props) {
+export function ProjectComposerPage({ connected, workspaceContext, onUseWorkspace, onOpenChangePlans }: Props) {
   const styles = useStyles();
   const [templates, setTemplates] = useState<ProjectTemplate[]>([]);
   const [selectedId, setSelectedId] = useState('');
@@ -75,6 +80,9 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
   const [artifactLoading, setArtifactLoading] = useState(false);
   const [acceptance, setAcceptance] = useState<ProjectAcceptanceReport | null>(null);
   const [acceptanceLoading, setAcceptanceLoading] = useState(false);
+  const [pendingManifestImport, setPendingManifestImport] = useState<ProjectManifestImportResult | null>(null);
+  const [manifestNotice, setManifestNotice] = useState('');
+  const manifestInputRef = useRef<HTMLInputElement | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -113,6 +121,35 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
     setAcceptance(null);
   }, [template]);
 
+  useEffect(() => {
+    if (!template || !pendingManifestImport || template.id !== pendingManifestImport.template_id) return;
+
+    setParameterValues(pendingManifestImport.parameters);
+    if (pendingManifestImport.workspace_id) {
+      onUseWorkspace({
+        id: pendingManifestImport.workspace_id,
+        name: pendingManifestImport.workspace_name || pendingManifestImport.workspace_id,
+      });
+    }
+    setPlan(null);
+    setStagedItemIds([]);
+    setStagedReconciliationItemIds([]);
+    setEventstreamArtifact(null);
+    setAcceptance(null);
+
+    const notes = [...pendingManifestImport.warnings];
+    if (pendingManifestImport.secret_parameters.length > 0) {
+      notes.push(
+        `Secrets were not imported: ${pendingManifestImport.secret_parameters.join(', ')}. Re-enter them when required.`,
+      );
+    }
+    setManifestNotice(
+      notes.length > 0
+        ? notes.join(' ')
+        : `Imported ${pendingManifestImport.template_id} manifest successfully.`,
+    );
+    setPendingManifestImport(null);
+  }, [template, pendingManifestImport]);
 
   useEffect(() => {
     setAcceptance(null);
@@ -358,6 +395,54 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
     }
   }
 
+  async function handleExportManifest() {
+    if (!template) return;
+    setError('');
+    try {
+      const manifest = await exportProjectManifest(
+        template.id,
+        workspaceContext?.id,
+        workspaceContext?.name,
+        parameterValues,
+      );
+      const environment = String(manifest.parameters.environment ?? 'project')
+        .replace(/[^A-Za-z0-9._-]+/g, '-');
+      const blob = new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `${manifest.template_id}.${environment}.fabric-project.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setManifestNotice(
+        manifest.secret_parameters.length > 0
+          ? `Manifest exported. Secret values were omitted: ${manifest.secret_parameters.join(', ')}.`
+          : 'Manifest exported.',
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function handleManifestFile(file?: File) {
+    if (!file) return;
+    setError('');
+    setManifestNotice('');
+    try {
+      const raw = JSON.parse(await file.text()) as ProjectManifest;
+      const imported = await importProjectManifest(raw);
+      setPendingManifestImport(imported);
+      setSelectedId(imported.template_id);
+    } catch (err) {
+      setPendingManifestImport(null);
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      if (manifestInputRef.current) manifestInputRef.current.value = '';
+    }
+  }
+
   async function copyVsCodeHandoff() {
     if (!template) return;
     const safeParameters = Object.fromEntries(
@@ -399,6 +484,15 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
             {planning ? 'Planning…' : workspaceContext ? 'Plan against selected workspace' : 'Plan new workspace'}
           </Button>
           <Button appearance="secondary" onClick={copyVsCodeHandoff}>Copy VS Code handoff</Button>
+          <Button appearance="secondary" onClick={handleExportManifest}>Export manifest</Button>
+          <Button appearance="secondary" onClick={() => manifestInputRef.current?.click()}>Import manifest</Button>
+          <input
+            ref={manifestInputRef}
+            type="file"
+            accept=".json,application/json"
+            style={{ display: 'none' }}
+            onChange={(event) => void handleManifestFile(event.target.files?.[0])}
+          />
           <Button appearance="secondary" disabled={artifactLoading || !workspaceContext || !connected} onClick={handleEventstreamArtifact}>
             {artifactLoading ? 'Rendering…' : 'Render eventstream.json'}
           </Button>
@@ -534,6 +628,12 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
       {!canLivePlan && (
         <div className={styles.warning}>
           <Text weight="semibold">Connect to the Fabric tenant before diffing the selected live workspace.</Text>
+        </div>
+      )}
+      {manifestNotice && (
+        <div className={styles.warning}>
+          <Text weight="semibold">Project manifest</Text>
+          <Text block>{manifestNotice}</Text>
         </div>
       )}
       {error && <div className={styles.warning}><Text>{error}</Text></div>}

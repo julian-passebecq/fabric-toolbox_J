@@ -212,6 +212,12 @@ export function App() {
     setWorkspaceContext({ id, name });
   }
 
+
+  function useWorkspaceContext(workspace: WorkspaceContext) {
+    if (workspaceContext?.id !== workspace.id) setItemContext(null);
+    setWorkspaceContext(workspace);
+  }
+
   async function handleConnect() {
     if (!tenantId.trim()) return;
     setConnecting(true);
@@ -318,7 +324,14 @@ export function App() {
   }
 
   function renderSection() {
-    if (section === 'Project Composer') return <ProjectComposerPage connected={connected} workspaceContext={workspaceContext} onOpenChangePlans={() => setSection('Change Plans')} />;
+    if (section === 'Project Composer') return (
+      <ProjectComposerPage
+        connected={connected}
+        workspaceContext={workspaceContext}
+        onUseWorkspace={useWorkspaceContext}
+        onOpenChangePlans={() => setSection('Change Plans')}
+      />
+    );
     if (section === 'Provisioning') {
       return (
         <OperationsPage
