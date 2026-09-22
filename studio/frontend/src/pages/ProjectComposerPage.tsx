@@ -14,10 +14,12 @@ import {
 } from '@fluentui/react-components';
 import { useEffect, useMemo, useState } from 'react';
 import {
+  EventstreamDefinitionArtifact,
   ProjectPlan,
   ProjectPlanAction,
   ProjectTemplate,
   createMutationPlan,
+  getEventstreamDefinitionArtifact,
   getProjectTemplates,
   planProject,
 } from '../api/client';
@@ -57,6 +59,8 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
   const [planning, setPlanning] = useState(false);
   const [staging, setStaging] = useState(false);
   const [stagedItemIds, setStagedItemIds] = useState<string[]>([]);
+  const [eventstreamArtifact, setEventstreamArtifact] = useState<EventstreamDefinitionArtifact | null>(null);
+  const [artifactLoading, setArtifactLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -90,6 +94,7 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
     setParameterValues(defaults);
     setPlan(null);
     setStagedItemIds([]);
+    setEventstreamArtifact(null);
   }, [template]);
 
   const planById = useMemo(() => {
@@ -151,6 +156,26 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
     }
   }
 
+  async function handleEventstreamArtifact() {
+    if (!template) return;
+    setArtifactLoading(true);
+    setError('');
+    try {
+      const artifact = await getEventstreamDefinitionArtifact(template.id, workspaceContext?.id, parameterValues);
+      setEventstreamArtifact(artifact);
+    } catch (err) {
+      setEventstreamArtifact(null);
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setArtifactLoading(false);
+    }
+  }
+
+  async function copyEventstreamDefinition() {
+    if (!eventstreamArtifact) return;
+    await navigator.clipboard.writeText(JSON.stringify(eventstreamArtifact.definition, null, 2));
+  }
+
   async function copyVsCodeHandoff() {
     if (!template) return;
     const safeParameters = Object.fromEntries(
@@ -192,6 +217,9 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
             {planning ? 'Planning…' : workspaceContext ? 'Plan against selected workspace' : 'Plan new workspace'}
           </Button>
           <Button appearance="secondary" onClick={copyVsCodeHandoff}>Copy VS Code handoff</Button>
+          <Button appearance="secondary" disabled={artifactLoading || !workspaceContext || !connected} onClick={handleEventstreamArtifact}>
+            {artifactLoading ? 'Rendering…' : 'Render eventstream.json'}
+          </Button>
         </div>
       </div>
 
@@ -219,6 +247,25 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
           {template.tags.map((tag) => <Badge key={tag} appearance="outline">{tag}</Badge>)}
         </div>
       </Card>
+
+      {eventstreamArtifact && (
+        <div className={styles.warning}>
+          <Text weight="semibold">
+            eventstream.json: {eventstreamArtifact.ready ? 'ready' : 'needs configuration'}
+          </Text>
+          <Text block>
+            Source mode: {eventstreamArtifact.source_mode}. Schema: {eventstreamArtifact.provenance.schema}.
+          </Text>
+          {eventstreamArtifact.missing_requirements.length > 0 && (
+            <Text block>Missing: {eventstreamArtifact.missing_requirements.join(', ')}</Text>
+          )}
+          <div className={styles.row}>
+            <Button appearance="secondary" disabled={!eventstreamArtifact.ready} onClick={copyEventstreamDefinition}>
+              Copy eventstream.json
+            </Button>
+          </div>
+        </div>
+      )}
 
       <section className={styles.section}>
         <Subtitle1>Project parameters</Subtitle1>
