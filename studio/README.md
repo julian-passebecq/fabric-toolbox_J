@@ -66,6 +66,7 @@ These writes are executable through the guarded-write broker:
 - update workspace name/description via upstream `Update-FabricWorkspace`
 - create Eventhouse via `New-FabricEventhouse`
 - create Eventstream via `New-FabricEventstream`
+- update Eventstream definition via `Update-FabricEventstreamDefinition`
 - create KQL Database via `New-FabricKQLDatabase`
 - create KQL Queryset via `New-FabricKQLQueryset`
 - create KQL Dashboard via `New-FabricKQLDashboard`
@@ -74,7 +75,7 @@ These writes are executable through the guarded-write broker:
 - create Environment via `New-FabricEnvironment`
 - create Data Pipeline via `New-FabricDataPipeline`
 
-Every item create uses upstream `SupportsShouldProcess` / `-WhatIf`, an expiring tenant-bound Studio plan, exact typed approval, and a name-based read-back through the matching upstream `Get-Fabric*` cmdlet.
+Every guarded item mutation uses upstream `SupportsShouldProcess` / `-WhatIf`, an expiring tenant-bound Studio plan and exact typed approval. Creates use name-based read-back through matching upstream `Get-Fabric*` cmdlets; Eventstream definition updates use definition read-back and SHA-bound artifact handling.
 
 For KQL Database, Composer resolves the existing parent Eventhouse item ID and passes it explicitly as `parentEventhouseId` before a create can be staged. Composer stages only dependency-ready resources; it never bypasses the guarded-write broker. Role changes, capacity assignment, other item lifecycle writes, job cancellation/retry, schedule writes, Git writes and destructive operations remain blocked until reviewed.
 
@@ -114,6 +115,7 @@ A feature record should make it possible to answer:
 6. With a target workspace selected, Composer marks only dependency-ready creates as **Ready to stage**. Stage those resources into **Change Plans**; staging does not execute a Fabric mutation.
 7. In **Change Plans**, run upstream `-WhatIf`, review the exact command, type the plan confirmation and execute the selected plans.
 8. Refresh Composer after each successful wave. Newly created dependencies unlock the next wave (for example Eventhouse -> KQL Database -> Eventstream/query/dashboard).
+16. Run **deployment acceptance** for Foil'o once the RTI core exists. Studio verifies Eventhouse, KQL Database, Eventstream and Lakehouse presence, reads the deployed `eventstream.json`, and compares its canonical topology hash with the generated desired definition without returning the live definition body to the UI.
 9. Open **Workspaces** and refresh the live inventory whenever workspace context needs to change.
 10. Select **Use workspace** on a workspace card. Recent workspace choices are remembered locally per tenant without credentials.
 11. Open **Items**. The selected workspace ID is injected automatically; select **Use item** once to establish item context.
