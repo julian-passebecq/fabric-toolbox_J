@@ -101,6 +101,7 @@ class ProjectManifest(BaseModel):
     workspace_name: str
     parameters: dict[str, Any] = Field(default_factory=dict)
     secret_parameters: list[str] = Field(default_factory=list)
+    missing_parameters: list[str] = Field(default_factory=list)
     items: list[ProjectItem] = Field(default_factory=list)
 
 
