@@ -105,3 +105,52 @@ def test_non_allowlisted_write_cannot_create_plan(monkeypatch):
                 "WorkspaceRole": "Viewer",
             },
         )
+
+
+
+def test_guarded_eventhouse_create_uses_whatif_and_name_readback(monkeypatch):
+    broker = MutationBroker()
+    monkeypatch.setattr(runtime, "status", lambda: _connected())
+    seen = {}
+
+    def validate(capability, parameters):
+        seen["validate"] = (capability.command, dict(parameters))
+        return {"success": True, "mode": "what-if"}
+
+    def execute(capability, parameters):
+        seen["execute"] = (capability.command, dict(parameters))
+        return {"id": "eventhouse-1", "displayName": parameters["EventhouseName"]}
+
+    def read(capability, parameters):
+        seen["read"] = (capability.command, dict(parameters))
+        return {"id": "eventhouse-1", "displayName": parameters["EventhouseName"]}
+
+    monkeypatch.setattr(runtime, "validate_guarded_write", validate)
+    monkeypatch.setattr(runtime, "execute_guarded_write", execute)
+    monkeypatch.setattr(runtime, "execute_read", read)
+
+    create = next(item for item in combined_catalog() if item.command == "New-FabricEventhouse")
+    plan = broker.create_plan(
+        create,
+        {"WorkspaceId": "ws-1", "EventhouseName": "foilo_rti"},
+    )
+
+    validation = broker.validate(plan.plan_id)
+    result = broker.execute(plan.plan_id, validation.plan.confirmation_text)
+
+    assert seen["validate"][0] == "New-FabricEventhouse"
+    assert seen["execute"][0] == "New-FabricEventhouse"
+    assert seen["read"] == (
+        "Get-FabricEventhouse",
+        {"WorkspaceId": "ws-1", "EventhouseName": "foilo_rti"},
+    )
+    assert result.verification["id"] == "eventhouse-1"
+
+
+def test_guarded_item_create_cannot_plan_without_mandatory_fields(monkeypatch):
+    broker = MutationBroker()
+    monkeypatch.setattr(runtime, "status", lambda: _connected())
+    create = next(item for item in combined_catalog() if item.command == "New-FabricEventstream")
+
+    with pytest.raises(ValueError, match="EventstreamName"):
+        broker.create_plan(create, {"WorkspaceId": "ws-1"})
