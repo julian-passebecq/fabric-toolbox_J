@@ -1,7 +1,8 @@
 import pytest
 
 from app.catalog import combined_catalog
-from app.models import SessionStatus
+from app.models import MutationArtifactRequest, SessionStatus
+import app.mutations as mutation_module
 from app.mutations import MutationBroker
 from app.providers.microsoftfabricmgmt import UnsafeOperation, runtime
 
@@ -175,3 +176,123 @@ def test_guarded_kql_database_plan_preserves_parent_eventhouse_binding(monkeypat
     assert "-parentEventhouseId 'eventhouse-1'" in plan.rendered_command
     assert "-KQLDatabaseType 'ReadWrite'" in plan.rendered_command
     assert "-WhatIf" in (plan.validation_command or "")
+
+
+def test_bound_eventstream_artifact_is_hash_verified_before_whatif(monkeypatch, tmp_path):
+    broker = MutationBroker()
+    monkeypatch.setattr(runtime, "status", lambda: _connected())
+    monkeypatch.setattr(mutation_module, "ARTIFACT_ROOT", tmp_path)
+
+    create = next(item for item in combined_catalog() if item.command == "New-FabricEventstream")
+    plan = broker.create_plan(
+        create,
+        {"WorkspaceId": "ws-1", "EventstreamName": "wind_events"},
+        artifacts=[
+            MutationArtifactRequest(
+                parameter="EventstreamPathDefinition",
+                filename="eventstream.json",
+                content='{"sources":[],"destinations":[],"streams":[],"operators":[],"compatibilityLevel":"1.1"}',
+            )
+        ],
+    )
+
+    assert len(plan.artifacts) == 1
+    artifact = plan.artifacts[0]
+    assert artifact.parameter == "EventstreamPathDefinition"
+    assert len(artifact.sha256) == 64
+    bound_path = plan.parameters["EventstreamPathDefinition"]
+    assert "eventstream.json" in str(bound_path)
+    assert "-EventstreamPathDefinition" in plan.rendered_command
+
+    with open(bound_path, "w", encoding="utf-8") as handle:
+        handle.write('{"tampered":true}')
+
+    with pytest.raises(UnsafeOperation, match="changed after approval"):
+        broker.validate(plan.plan_id)
+
+
+def test_bound_eventstream_artifact_survives_whatif_then_cleans_up(monkeypatch, tmp_path):
+    broker = MutationBroker()
+    monkeypatch.setattr(runtime, "status", lambda: _connected())
+    monkeypatch.setattr(mutation_module, "ARTIFACT_ROOT", tmp_path)
+
+    seen = {}
+
+    def validate(capability, parameters):
+        seen["validate_path"] = parameters["EventstreamPathDefinition"]
+        return {"success": True, "mode": "what-if"}
+
+    def execute(capability, parameters):
+        seen["execute_path"] = parameters["EventstreamPathDefinition"]
+        return {"id": "eventstream-1", "displayName": parameters["EventstreamName"]}
+
+    monkeypatch.setattr(runtime, "validate_guarded_write", validate)
+    monkeypatch.setattr(runtime, "execute_guarded_write", execute)
+    monkeypatch.setattr(
+        runtime,
+        "execute_read",
+        lambda capability, parameters: {"id": "eventstream-1", "displayName": "wind_events"},
+    )
+
+    create = next(item for item in combined_catalog() if item.command == "New-FabricEventstream")
+    plan = broker.create_plan(
+        create,
+        {"WorkspaceId": "ws-1", "EventstreamName": "wind_events"},
+        artifacts=[
+            MutationArtifactRequest(
+                parameter="EventstreamPathDefinition",
+                filename="eventstream.json",
+                content='{"sources":[],"destinations":[],"streams":[],"operators":[],"compatibilityLevel":"1.1"}',
+            )
+        ],
+    )
+    bound_path = plan.parameters["EventstreamPathDefinition"]
+
+    validation = broker.validate(plan.plan_id)
+    assert validation.plan.status == "validated"
+    assert seen["validate_path"] == bound_path
+
+    result = broker.execute(plan.plan_id, validation.plan.confirmation_text)
+    assert result.plan.status == "executed"
+    assert seen["execute_path"] == bound_path
+    assert not (tmp_path / plan.plan_id).exists()
+
+
+def test_artifact_binding_rejects_non_definition_parameter(monkeypatch, tmp_path):
+    broker = MutationBroker()
+    monkeypatch.setattr(runtime, "status", lambda: _connected())
+    monkeypatch.setattr(mutation_module, "ARTIFACT_ROOT", tmp_path)
+
+    create = next(item for item in combined_catalog() if item.command == "New-FabricEventstream")
+    with pytest.raises(UnsafeOperation, match="not allowed"):
+        broker.create_plan(
+            create,
+            {"WorkspaceId": "ws-1", "EventstreamName": "wind_events"},
+            artifacts=[
+                MutationArtifactRequest(
+                    parameter="EventstreamDescription",
+                    filename="description.txt",
+                    content="not a definition file",
+                )
+            ],
+        )
+
+
+def test_artifact_binding_rejects_path_traversal_filename(monkeypatch, tmp_path):
+    broker = MutationBroker()
+    monkeypatch.setattr(runtime, "status", lambda: _connected())
+    monkeypatch.setattr(mutation_module, "ARTIFACT_ROOT", tmp_path)
+
+    create = next(item for item in combined_catalog() if item.command == "New-FabricEventstream")
+    with pytest.raises(ValueError, match="plain file name"):
+        broker.create_plan(
+            create,
+            {"WorkspaceId": "ws-1", "EventstreamName": "wind_events"},
+            artifacts=[
+                MutationArtifactRequest(
+                    parameter="EventstreamPathDefinition",
+                    filename="../eventstream.json",
+                    content="{}",
+                )
+            ],
+        )

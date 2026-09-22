@@ -346,3 +346,122 @@ def plan_project(template: ProjectTemplate, request: ProjectPlanRequest) -> Proj
             "No create action is dependency-ready yet. Create/select the workspace or execute the previous dependency wave, then refresh the plan."
         ),
     )
+
+
+def build_eventstream_definition(template: ProjectTemplate, request: ProjectPlanRequest) -> dict[str, Any]:
+    """Render the Foil'o Eventstream topology from project parameters and resolved Fabric dependencies."""
+    resolved_parameters, missing_parameters = _resolve_parameters(template, request.parameters)
+    current_items = request.current_items
+    live_inventory = False
+    if current_items is None:
+        if request.workspace_id:
+            current_items = _live_items(request.workspace_id)
+            live_inventory = True
+        else:
+            current_items = []
+
+    actual = [item for item in current_items if isinstance(item, dict)]
+    by_name_type = {
+        (_actual_name(item).strip().casefold(), _actual_type(item).strip().casefold()): item
+        for item in actual
+        if _actual_name(item).strip()
+    }
+
+    eventstream = next((item for item in template.items if item.type == "Eventstream"), None)
+    eventhouse = next((item for item in template.items if item.type == "Eventhouse"), None)
+    database = next((item for item in template.items if item.type == "KQLDatabase"), None)
+    if not eventstream or not eventhouse or not database:
+        raise ValueError("Project template must declare Eventstream, Eventhouse and KQLDatabase items")
+
+    existing_eventhouse = by_name_type.get((eventhouse.display_name.casefold(), "eventhouse"))
+    existing_database = by_name_type.get((database.display_name.casefold(), "kqldatabase"))
+    eventhouse_id = _actual_id(existing_eventhouse)
+
+    mode = str(resolved_parameters.get("ingestion_mode") or "fabric-kafka-endpoint")
+    topic = str(resolved_parameters.get("kafka_topic") or "foil.wind.telemetry")
+    consumer_group = str(resolved_parameters.get("kafka_consumer_group") or "foilo-fabric-consumer")
+    connection_id = str(resolved_parameters.get("kafka_connection_id") or "")
+    table_name = str(resolved_parameters.get("kql_table_name") or "turbine_telemetry")
+
+    missing_requirements = list(missing_parameters)
+    if not request.workspace_id:
+        missing_requirements.append("workspace_id")
+    if not eventhouse_id:
+        missing_requirements.append("eventhouse_item_id")
+    if not existing_database:
+        missing_requirements.append("kql_database_item")
+    if mode == "direct-kafka-source" and not connection_id:
+        missing_requirements.append("kafka_connection_id")
+
+    source_name = "foilo-kafka-ingress"
+    stream_name = "wind-events-stream"
+
+    if mode == "fabric-kafka-endpoint":
+        source = {
+            "name": source_name,
+            "type": "CustomEndpoint",
+            "properties": {},
+        }
+    elif mode == "direct-kafka-source":
+        source = {
+            "name": source_name,
+            "type": "ApacheKafka",
+            "properties": {
+                "dataConnectionId": connection_id,
+                "topic": topic,
+                "consumerGroupName": consumer_group,
+                "autoOffsetReset": "Latest",
+                "saslMechanism": "PLAIN",
+                "securityProtocol": "SASL_SSL",
+            },
+        }
+    else:
+        raise ValueError(f"Unsupported Eventstream ingestion mode: {mode}")
+
+    definition = {
+        "sources": [source],
+        "destinations": [
+            {
+                "name": "foilo-eventhouse-destination",
+                "type": "Eventhouse",
+                "properties": {
+                    "dataIngestionMode": "ProcessedIngestion",
+                    "workspaceId": request.workspace_id or "",
+                    "itemId": eventhouse_id,
+                    "databaseName": database.display_name,
+                    "tableName": table_name,
+                    "inputSerialization": {
+                        "type": "Json",
+                        "properties": {"encoding": "UTF8"},
+                    },
+                },
+                "inputNodes": [{"name": stream_name}],
+            }
+        ],
+        "streams": [
+            {
+                "name": stream_name,
+                "type": "DefaultStream",
+                "properties": {},
+                "inputNodes": [{"name": source_name}],
+            }
+        ],
+        "operators": [],
+        "compatibilityLevel": "1.1",
+    }
+
+    return {
+        "template_id": template.id,
+        "item_id": eventstream.id,
+        "display_name": eventstream.display_name,
+        "filename": "eventstream.json",
+        "ready": not missing_requirements,
+        "missing_requirements": sorted(set(missing_requirements)),
+        "live_inventory": live_inventory,
+        "source_mode": mode,
+        "definition": definition,
+        "provenance": {
+            "schema": "Microsoft Fabric Eventstream definition",
+            "source": "Microsoft Fabric REST API",
+        },
+    }

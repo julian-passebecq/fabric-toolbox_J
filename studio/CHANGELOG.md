@@ -1,5 +1,18 @@
 # Studio changelog
 
+## 0.11.0
+
+- Added a generated Foil'o `eventstream.json` artifact that follows the current Microsoft Fabric Eventstream definition topology model.
+- Added two Foil'o ingestion modes: Fabric Custom Endpoint for the default outbound Oracle design, and Apache Kafka source through a registered Fabric connection.
+- Added explicit Kafka connection/consumer-group and KQL destination-table project parameters.
+- Added Eventstream artifact preview/copy in Project Composer with live dependency checks for workspace, Eventhouse and KQL Database.
+- Added content-bound mutation artifacts for upstream file-based Fabric cmdlets. Artifact bytes are SHA-256 bound to the mutation plan, materialized under a plan-scoped temporary directory, verified before WhatIf and execution, and cleaned after terminal execution.
+- Restricted artifact binding to reviewed upstream `*PathDefinition` / `*PathPlatformDefinition` parameters with filename/path and size guardrails.
+- Project Composer now attaches the generated `eventstream.json` automatically when staging a dependency-ready Eventstream create plan.
+- Change Plans now exposes validation and guarded execution controls for Composer-staged plans, including exact confirmation text and bound-artifact SHA visibility.
+- Added regression coverage for artifact tampering, path traversal, cleanup and Eventstream topology generation.
+
+
 ## 0.10.0
 
 - Added guarded provisioning for KQL Database through upstream `New-FabricKQLDatabase`, including explicit ReadWrite/Shortcut type validation, parent Eventhouse binding and name-based read-back verification.

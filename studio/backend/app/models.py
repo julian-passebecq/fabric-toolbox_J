@@ -149,8 +149,22 @@ class ExecutionResult(BaseModel):
     result: dict[str, Any]
 
 
+class MutationArtifactRequest(BaseModel):
+    parameter: str = Field(min_length=1, max_length=128)
+    filename: str = Field(min_length=1, max_length=255)
+    content: str = Field(max_length=5_000_000)
+
+
+class MutationArtifactDigest(BaseModel):
+    parameter: str
+    filename: str
+    sha256: str
+    size_bytes: int
+
+
 class MutationPlanRequest(BaseModel):
     parameters: dict[str, Any] = Field(default_factory=dict)
+    artifacts: list[MutationArtifactRequest] = Field(default_factory=list)
 
 
 class MutationApprovalRequest(BaseModel):
@@ -165,6 +179,7 @@ class MutationPlan(BaseModel):
     risk: Risk
     tenant_id: str
     parameters: dict[str, Any]
+    artifacts: list[MutationArtifactDigest] = Field(default_factory=list)
     rendered_command: str
     validation_command: str | None = None
     supports_validation: bool = False
