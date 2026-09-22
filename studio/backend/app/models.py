@@ -108,6 +108,7 @@ class ProjectPlanAction(BaseModel):
     reconciliation_parameters: dict[str, Any] = Field(default_factory=dict)
     reconciliation_ready: bool = False
     reconciliation_reason: str = ""
+    deployment_wave: int | None = None
 
 
 class ProjectPlan(BaseModel):
@@ -121,6 +122,7 @@ class ProjectPlan(BaseModel):
     counts: dict[str, int] = Field(default_factory=dict)
     resolved_parameters: dict[str, Any] = Field(default_factory=dict)
     missing_parameters: list[str] = Field(default_factory=list)
+    current_wave: int | None = None
     apply_supported: bool = False
     apply_note: str = ""
 
@@ -217,6 +219,34 @@ class MutationPlan(BaseModel):
     created_at: str
     expires_at: str
     status: MutationStatus = "planned"
+
+
+class ProjectWaveStageEntry(BaseModel):
+    item_id: str
+    display_name: str
+    item_type: str
+    deployment_wave: int
+    capability_id: str
+    plan_id: str
+    confirmation_text: str
+    artifact_sha256: list[str] = Field(default_factory=list)
+
+
+class ProjectWaveStageIssue(BaseModel):
+    item_id: str
+    display_name: str
+    detail: str
+
+
+class ProjectWaveStageResult(BaseModel):
+    template_id: str
+    project_name: str
+    workspace_id: str
+    wave: int | None = None
+    status: Literal["staged", "partial", "blocked", "complete"]
+    staged: list[ProjectWaveStageEntry] = Field(default_factory=list)
+    issues: list[ProjectWaveStageIssue] = Field(default_factory=list)
+    note: str = ""
 
 
 class MutationValidationResult(BaseModel):
