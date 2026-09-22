@@ -274,6 +274,26 @@ export type ProjectAcceptanceReport = {
   definition_match?: boolean | null;
 };
 
+
+export type ProjectItemDefinitionArtifact = {
+  template_id: string;
+  item_id: string;
+  item_type: string;
+  display_name: string;
+  filename: string;
+  ready: boolean;
+  missing_requirements: string[];
+  live_inventory: boolean;
+  content: string;
+  content_sha256?: string | null;
+  artifact_parameter?: string | null;
+  mutation_parameters: Record<string, unknown>;
+  provenance: {
+    schema: string;
+    source: string;
+  };
+};
+
 export type EventstreamDefinitionArtifact = {
   template_id: string;
   item_id: string;
@@ -411,6 +431,22 @@ export function getEventstreamDefinitionArtifact(
 ) {
   return request<EventstreamDefinitionArtifact>(
     `/api/projects/templates/${encodeURIComponent(templateId)}/artifacts/eventstream`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ ...(workspaceId ? { workspace_id: workspaceId } : {}), parameters }),
+    },
+  );
+}
+
+
+export function getProjectItemDefinitionArtifact(
+  templateId: string,
+  itemId: string,
+  workspaceId?: string,
+  parameters: Record<string, unknown> = {},
+) {
+  return request<ProjectItemDefinitionArtifact>(
+    `/api/projects/templates/${encodeURIComponent(templateId)}/artifacts/items/${encodeURIComponent(itemId)}`,
     {
       method: 'POST',
       body: JSON.stringify({ ...(workspaceId ? { workspace_id: workspaceId } : {}), parameters }),
