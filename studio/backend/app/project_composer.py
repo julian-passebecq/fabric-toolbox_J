@@ -1,12 +1,21 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 from collections import Counter
 from pathlib import Path
 from typing import Any
 
 from .catalog import combined_catalog
-from .models import ProjectPlan, ProjectPlanAction, ProjectPlanRequest, ProjectTemplate
+from .models import (
+    ProjectAcceptanceCheck,
+    ProjectAcceptanceReport,
+    ProjectPlan,
+    ProjectPlanAction,
+    ProjectPlanRequest,
+    ProjectTemplate,
+)
 from .providers.fabric_rest import execute_rest_read
 from .providers.microsoftfabricmgmt import UnsafeOperation, runtime
 
@@ -532,3 +541,274 @@ def build_eventstream_definition(template: ProjectTemplate, request: ProjectPlan
             "source": "Microsoft Fabric REST API",
         },
     }
+
+
+def _canonical_json(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _canonical_json(value[key]) for key in sorted(value)}
+    if isinstance(value, list):
+        canonical = [_canonical_json(item) for item in value]
+        try:
+            return sorted(
+                canonical,
+                key=lambda item: json.dumps(item, sort_keys=True, separators=(",", ":"), ensure_ascii=False),
+            )
+        except TypeError:
+            return canonical
+    return value
+
+
+def _json_sha256(value: Any) -> str:
+    payload = json.dumps(
+        _canonical_json(value),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _find_eventstream_part(value: Any) -> dict[str, Any] | None:
+    if isinstance(value, dict):
+        if value.get("path") == "eventstream.json" and "payload" in value:
+            return value
+        for nested in value.values():
+            found = _find_eventstream_part(nested)
+            if found:
+                return found
+    elif isinstance(value, list):
+        for nested in value:
+            found = _find_eventstream_part(nested)
+            if found:
+                return found
+    return None
+
+
+def _decode_eventstream_definition(result: dict[str, Any]) -> dict[str, Any]:
+    part = _find_eventstream_part(result)
+    if not part:
+        raise ValueError("Live Eventstream definition did not contain eventstream.json")
+
+    payload = part.get("payload")
+    if not isinstance(payload, str) or not payload:
+        raise ValueError("Live Eventstream eventstream.json payload is empty")
+
+    payload_type = str(part.get("payloadType") or "")
+    try:
+        if payload_type.casefold() == "inlinebase64":
+            decoded = base64.b64decode(payload).decode("utf-8-sig")
+        else:
+            decoded = payload
+        parsed = json.loads(decoded)
+    except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("Live Eventstream eventstream.json payload could not be decoded") from exc
+
+    if not isinstance(parsed, dict):
+        raise ValueError("Live Eventstream definition must decode to a JSON object")
+    return parsed
+
+
+def accept_project(template: ProjectTemplate, request: ProjectPlanRequest) -> ProjectAcceptanceReport:
+    if not request.workspace_id:
+        raise ValueError("workspace_id is required for deployment acceptance")
+
+    resolved_parameters, missing_parameters = _resolve_parameters(template, request.parameters)
+    del resolved_parameters
+
+    current_items = request.current_items
+    if current_items is None:
+        current_items = _live_items(request.workspace_id)
+    actual = [item for item in current_items if isinstance(item, dict)]
+
+    by_name_type = {
+        (_actual_name(item).strip().casefold(), _actual_type(item).strip().casefold()): item
+        for item in actual
+        if _actual_name(item).strip()
+    }
+    desired_by_id = {item.id: item for item in template.items}
+
+    checks: list[ProjectAcceptanceCheck] = []
+    required_chain = [
+        ("rti-eventhouse", "Eventhouse"),
+        ("rti-kql-database", "KQL Database"),
+        ("rti-eventstream", "Eventstream"),
+        ("de-lakehouse", "Lakehouse"),
+    ]
+    existing_by_template_id: dict[str, dict[str, Any]] = {}
+
+    for template_item_id, label in required_chain:
+        desired = desired_by_id.get(template_item_id)
+        if not desired:
+            checks.append(
+                ProjectAcceptanceCheck(
+                    id=f"item:{template_item_id}",
+                    label=label,
+                    status="fail",
+                    detail="Required acceptance item is missing from the project template.",
+                )
+            )
+            continue
+
+        existing = by_name_type.get((desired.display_name.casefold(), desired.type.casefold()))
+        if existing:
+            existing_by_template_id[template_item_id] = existing
+            checks.append(
+                ProjectAcceptanceCheck(
+                    id=f"item:{template_item_id}",
+                    label=label,
+                    status="pass",
+                    detail=f"{desired.display_name} exists with the expected Fabric item type.",
+                    item_id=_actual_id(existing) or None,
+                    expected=f"{desired.type}:{desired.display_name}",
+                    actual=f"{_actual_type(existing)}:{_actual_name(existing)}",
+                )
+            )
+        else:
+            checks.append(
+                ProjectAcceptanceCheck(
+                    id=f"item:{template_item_id}",
+                    label=label,
+                    status="fail",
+                    detail=f"{desired.display_name} is missing from the selected workspace.",
+                    expected=f"{desired.type}:{desired.display_name}",
+                )
+            )
+
+    if missing_parameters:
+        checks.append(
+            ProjectAcceptanceCheck(
+                id="parameters",
+                label="Project parameters",
+                status="fail",
+                detail="Required project parameters are missing: " + ", ".join(missing_parameters),
+            )
+        )
+    else:
+        checks.append(
+            ProjectAcceptanceCheck(
+                id="parameters",
+                label="Project parameters",
+                status="pass",
+                detail="Required Foil'o project parameters are resolved.",
+            )
+        )
+
+    desired_hash: str | None = None
+    live_hash: str | None = None
+    definition_match: bool | None = None
+
+    eventstream = existing_by_template_id.get("rti-eventstream")
+    dependencies_ready = all(
+        key in existing_by_template_id
+        for key in ("rti-eventhouse", "rti-kql-database", "rti-eventstream")
+    )
+
+    if eventstream and dependencies_ready and not missing_parameters:
+        artifact_request = ProjectPlanRequest(
+            workspace_id=request.workspace_id,
+            current_items=actual,
+            parameters=request.parameters,
+        )
+        artifact = build_eventstream_definition(template, artifact_request)
+        if not artifact["ready"]:
+            checks.append(
+                ProjectAcceptanceCheck(
+                    id="eventstream-definition",
+                    label="Eventstream topology",
+                    status="fail",
+                    detail="Desired Eventstream definition is not renderable: "
+                    + ", ".join(artifact["missing_requirements"]),
+                )
+            )
+        else:
+            desired_definition = artifact["definition"]
+            desired_hash = _json_sha256(desired_definition)
+            capability = next(
+                (
+                    item
+                    for item in combined_catalog()
+                    if item.id == "ps-eventstream-get-fabriceventstreamdefinition"
+                ),
+                None,
+            )
+            if not capability or capability.execution_policy != "read":
+                checks.append(
+                    ProjectAcceptanceCheck(
+                        id="eventstream-definition",
+                        label="Eventstream topology",
+                        status="fail",
+                        detail="Reviewed Eventstream definition read capability is unavailable.",
+                        expected=desired_hash,
+                    )
+                )
+            else:
+                eventstream_id = _actual_id(eventstream)
+                try:
+                    live_result = runtime.execute_read(
+                        capability,
+                        {
+                            "WorkspaceId": request.workspace_id,
+                            "EventstreamId": eventstream_id,
+                        },
+                    )
+                    live_definition = _decode_eventstream_definition(live_result)
+                    live_hash = _json_sha256(live_definition)
+                    definition_match = desired_hash == live_hash
+                    checks.append(
+                        ProjectAcceptanceCheck(
+                            id="eventstream-definition",
+                            label="Eventstream topology",
+                            status="pass" if definition_match else "fail",
+                            detail=(
+                                "Live eventstream.json matches the generated Foil'o topology."
+                                if definition_match
+                                else "Live eventstream.json differs from the generated Foil'o topology; stage definition reconciliation."
+                            ),
+                            item_id=eventstream_id or None,
+                            expected=desired_hash,
+                            actual=live_hash,
+                        )
+                    )
+                except (ValueError, RuntimeError) as exc:
+                    checks.append(
+                        ProjectAcceptanceCheck(
+                            id="eventstream-definition",
+                            label="Eventstream topology",
+                            status="fail",
+                            detail=f"Live Eventstream definition could not be verified: {exc}",
+                            item_id=eventstream_id or None,
+                            expected=desired_hash,
+                        )
+                    )
+    else:
+        missing = [
+            key
+            for key in ("rti-eventhouse", "rti-kql-database", "rti-eventstream")
+            if key not in existing_by_template_id
+        ]
+        checks.append(
+            ProjectAcceptanceCheck(
+                id="eventstream-definition",
+                label="Eventstream topology",
+                status="fail",
+                detail=(
+                    "Topology comparison is blocked until required Fabric items exist: "
+                    + ", ".join(missing)
+                    if missing
+                    else "Topology comparison is blocked until required project parameters are resolved."
+                ),
+            )
+        )
+
+    accepted = all(check.status == "pass" for check in checks)
+    return ProjectAcceptanceReport(
+        template_id=template.id,
+        project_name=template.name,
+        workspace_id=request.workspace_id,
+        status="pass" if accepted else "fail",
+        accepted=accepted,
+        checks=checks,
+        desired_eventstream_sha256=desired_hash,
+        live_eventstream_sha256=live_hash,
+        definition_match=definition_match,
+    )
