@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 from collections import Counter
 from pathlib import Path
@@ -464,4 +466,223 @@ def build_eventstream_definition(template: ProjectTemplate, request: ProjectPlan
             "schema": "Microsoft Fabric Eventstream definition",
             "source": "Microsoft Fabric REST API",
         },
+    }
+
+
+def _eventstream_definition_capability():
+    return next(
+        item
+        for item in combined_catalog()
+        if item.id == "rest-eventstream-definition-get"
+    )
+
+
+def _find_definition_parts(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, dict):
+        definition = value.get("definition")
+        if isinstance(definition, dict) and isinstance(definition.get("parts"), list):
+            return [part for part in definition["parts"] if isinstance(part, dict)]
+        for child in value.values():
+            parts = _find_definition_parts(child)
+            if parts:
+                return parts
+    elif isinstance(value, list):
+        for child in value:
+            parts = _find_definition_parts(child)
+            if parts:
+                return parts
+    return []
+
+
+def _decode_eventstream_definition(result: dict[str, Any]) -> dict[str, Any]:
+    parts = _find_definition_parts(result)
+    part = next((item for item in parts if item.get("path") == "eventstream.json"), None)
+    if not part:
+        raise ValueError("Fabric getDefinition response did not contain eventstream.json")
+
+    payload = part.get("payload")
+    if not isinstance(payload, str) or not payload:
+        raise ValueError("Fabric eventstream.json definition payload is empty")
+
+    try:
+        decoded = base64.b64decode(payload, validate=True).decode("utf-8-sig")
+        parsed = json.loads(decoded)
+    except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("Fabric eventstream.json payload is not valid Base64 JSON") from exc
+
+    if not isinstance(parsed, dict):
+        raise ValueError("Fabric eventstream.json payload must decode to a JSON object")
+    return parsed
+
+
+def _semantic_definition(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _semantic_definition(child)
+            for key, child in sorted(value.items())
+            if key != "id"
+        }
+    if isinstance(value, list):
+        return [_semantic_definition(child) for child in value]
+    return value
+
+
+def _definition_digest(value: Any) -> str:
+    canonical = json.dumps(
+        _semantic_definition(value),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _definition_diff(desired: Any, actual: Any, path: str = "$", limit: int = 50) -> list[dict[str, Any]]:
+    differences: list[dict[str, Any]] = []
+
+    def walk(expected: Any, current: Any, current_path: str) -> None:
+        if len(differences) >= limit:
+            return
+
+        if isinstance(expected, dict) and isinstance(current, dict):
+            keys = sorted(set(expected) | set(current))
+            for key in keys:
+                if key == "id":
+                    continue
+                next_path = f"{current_path}.{key}"
+                if key not in expected:
+                    differences.append(
+                        {"path": next_path, "kind": "extra", "desired": None, "actual": current[key]}
+                    )
+                elif key not in current:
+                    differences.append(
+                        {"path": next_path, "kind": "missing", "desired": expected[key], "actual": None}
+                    )
+                else:
+                    walk(expected[key], current[key], next_path)
+                if len(differences) >= limit:
+                    return
+            return
+
+        if isinstance(expected, list) and isinstance(current, list):
+            if len(expected) != len(current):
+                differences.append(
+                    {
+                        "path": current_path,
+                        "kind": "length",
+                        "desired": len(expected),
+                        "actual": len(current),
+                    }
+                )
+            for index, (expected_item, current_item) in enumerate(zip(expected, current)):
+                walk(expected_item, current_item, f"{current_path}[{index}]")
+                if len(differences) >= limit:
+                    return
+            return
+
+        if expected != current:
+            differences.append(
+                {
+                    "path": current_path,
+                    "kind": "changed",
+                    "desired": expected,
+                    "actual": current,
+                }
+            )
+
+    walk(_semantic_definition(desired), _semantic_definition(actual), path)
+    return differences
+
+
+def inspect_eventstream_drift(template: ProjectTemplate, request: ProjectPlanRequest) -> dict[str, Any]:
+    """Compare the desired Composer Eventstream topology with the current Fabric definition."""
+    if not request.workspace_id:
+        return {
+            "template_id": template.id,
+            "ready": False,
+            "in_sync": False,
+            "missing_requirements": ["workspace_id"],
+            "differences": [],
+        }
+
+    current_items = request.current_items
+    live_inventory = False
+    if current_items is None:
+        current_items = _live_items(request.workspace_id)
+        live_inventory = True
+
+    actual = [item for item in current_items if isinstance(item, dict)]
+    by_name_type = {
+        (_actual_name(item).strip().casefold(), _actual_type(item).strip().casefold()): item
+        for item in actual
+        if _actual_name(item).strip()
+    }
+
+    eventstream = next((item for item in template.items if item.type == "Eventstream"), None)
+    if not eventstream:
+        raise ValueError("Project template must declare an Eventstream item")
+
+    existing_eventstream = by_name_type.get((eventstream.display_name.casefold(), "eventstream"))
+    eventstream_id = _actual_id(existing_eventstream)
+    if not eventstream_id:
+        return {
+            "template_id": template.id,
+            "display_name": eventstream.display_name,
+            "workspace_id": request.workspace_id,
+            "ready": False,
+            "in_sync": False,
+            "live_inventory": live_inventory,
+            "missing_requirements": ["eventstream_item"],
+            "differences": [],
+        }
+
+    desired_request = ProjectPlanRequest(
+        workspace_id=request.workspace_id,
+        current_items=actual,
+        parameters=request.parameters,
+    )
+    artifact = build_eventstream_definition(template, desired_request)
+    if not artifact["ready"]:
+        return {
+            "template_id": template.id,
+            "display_name": eventstream.display_name,
+            "workspace_id": request.workspace_id,
+            "eventstream_id": eventstream_id,
+            "ready": False,
+            "in_sync": False,
+            "live_inventory": live_inventory,
+            "missing_requirements": artifact["missing_requirements"],
+            "differences": [],
+        }
+
+    result = execute_rest_read(
+        _eventstream_definition_capability(),
+        {
+            "workspaceId": request.workspace_id,
+            "eventstreamId": eventstream_id,
+        },
+    )
+    live_definition = _decode_eventstream_definition(result)
+    desired_definition = artifact["definition"]
+
+    desired_sha256 = _definition_digest(desired_definition)
+    live_sha256 = _definition_digest(live_definition)
+    differences = _definition_diff(desired_definition, live_definition)
+
+    return {
+        "template_id": template.id,
+        "display_name": eventstream.display_name,
+        "workspace_id": request.workspace_id,
+        "eventstream_id": eventstream_id,
+        "ready": True,
+        "in_sync": desired_sha256 == live_sha256,
+        "live_inventory": live_inventory,
+        "missing_requirements": [],
+        "desired_sha256": desired_sha256,
+        "live_sha256": live_sha256,
+        "difference_count": len(differences),
+        "differences": differences,
+        "desired_definition": desired_definition,
+        "live_definition": live_definition,
+        "comparison": "semantic topology; Fabric-generated id fields are ignored",
     }
