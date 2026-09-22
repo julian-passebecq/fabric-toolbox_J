@@ -202,3 +202,77 @@ def test_kql_dashboard_waits_for_database_and_queryset_dependencies():
     assert dashboard.provisioning_ready is True
     assert dashboard.provisioning_capability_id == "ps-kql-dashboard-new-fabrickqldashboard"
     assert dashboard.provisioning_parameters["KQLDashboardName"] == "wind_realtime_dashboard"
+
+
+def test_eventstream_artifact_uses_custom_endpoint_and_eventhouse_destination():
+    from app.project_composer import build_eventstream_definition
+
+    template = get_project_template("foilo-wind-rti")
+    artifact = build_eventstream_definition(
+        template,
+        ProjectPlanRequest(
+            workspace_id="workspace-1",
+            current_items=[
+                {"id": "eventhouse-123", "displayName": "foilo_rti", "type": "Eventhouse"},
+                {"id": "database-123", "displayName": "wind_telemetry", "type": "KQLDatabase"},
+            ],
+        ),
+    )
+
+    assert artifact["ready"] is True
+    assert artifact["source_mode"] == "fabric-kafka-endpoint"
+    definition = artifact["definition"]
+    assert definition["sources"][0]["type"] == "CustomEndpoint"
+    assert definition["streams"][0]["inputNodes"] == [{"name": "foilo-kafka-ingress"}]
+    destination = definition["destinations"][0]
+    assert destination["type"] == "Eventhouse"
+    assert destination["properties"]["itemId"] == "eventhouse-123"
+    assert destination["properties"]["databaseName"] == "wind_telemetry"
+    assert destination["properties"]["tableName"] == "turbine_telemetry"
+    assert definition["compatibilityLevel"] == "1.1"
+
+
+def test_direct_kafka_eventstream_artifact_requires_fabric_connection_id():
+    from app.project_composer import build_eventstream_definition
+
+    template = get_project_template("foilo-wind-rti")
+    request = ProjectPlanRequest(
+        workspace_id="workspace-1",
+        current_items=[
+            {"id": "eventhouse-123", "displayName": "foilo_rti", "type": "Eventhouse"},
+        ],
+        parameters={"ingestion_mode": "direct-kafka-source"},
+    )
+    artifact = build_eventstream_definition(template, request)
+    assert artifact["ready"] is False
+    assert "kafka_connection_id" in artifact["missing_requirements"]
+
+    request.parameters["kafka_connection_id"] = "connection-123"
+    request.parameters["kafka_topic"] = "foil.wind.telemetry"
+    artifact = build_eventstream_definition(template, request)
+    source = artifact["definition"]["sources"][0]
+
+    assert artifact["ready"] is True
+    assert source["type"] == "ApacheKafka"
+    assert source["properties"]["dataConnectionId"] == "connection-123"
+    assert source["properties"]["topic"] == "foil.wind.telemetry"
+    assert source["properties"]["consumerGroupName"] == "foilo-fabric-consumer"
+
+
+def test_eventstream_artifact_api_exposes_definition_without_logging_secrets():
+    from app.main import project_eventstream_artifact
+
+    response = project_eventstream_artifact(
+        "foilo-wind-rti",
+        ProjectPlanRequest(
+            workspace_id="workspace-1",
+            current_items=[
+                {"id": "eventhouse-123", "displayName": "foilo_rti", "type": "Eventhouse"},
+            ],
+            parameters={"kafka_password": "do-not-return", "kql_table_name": "telemetry_raw"},
+        ),
+    )
+
+    assert response["filename"] == "eventstream.json"
+    assert response["definition"]["destinations"][0]["properties"]["tableName"] == "telemetry_raw"
+    assert "do-not-return" not in str(response)
