@@ -305,9 +305,13 @@ def project_template(template_id: str) -> ProjectTemplate:
 def project_plan(template_id: str, request: ProjectPlanRequest | None = None) -> ProjectPlan:
     try:
         template = get_project_template(template_id)
-        plan = plan_project(template, request or ProjectPlanRequest())
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    try:
+        plan = plan_project(template, request or ProjectPlanRequest())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except UnsafeOperation as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ProviderUnavailable as exc:
