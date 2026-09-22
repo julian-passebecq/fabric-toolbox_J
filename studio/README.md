@@ -1,11 +1,12 @@
 # Fabric Ops Studio
 
-Fabric Ops Studio is a management and operations UI layered on top of the existing Microsoft Fabric Toolbox.
+Fabric Ops Studio is a project-composition, management and operations UI layered on top of the existing Microsoft Fabric Toolbox.
 
 ## Product scope
 
 The Studio is intentionally focused on tasks that are cumbersome to perform repeatedly in the Fabric portal or directly from a terminal:
 
+- declarative project composition and live desired-vs-actual workspace planning
 - tenant, capacity, workspace and item inventory
 - workspace membership and access review
 - Fabric item lifecycle operations
@@ -96,14 +97,17 @@ A feature record should make it possible to answer:
 
 1. Start Studio.
 2. Connect to a Fabric tenant with the tenant ID.
-3. Open **Workspaces** and refresh the live inventory.
-4. Select **Use workspace** on a workspace card. Recent workspace choices are remembered locally per tenant without credentials.
-5. Open **Items**. The selected workspace ID is injected automatically; select **Use item** once to establish item context.
-6. Item details, connections, runs and schedules inherit `workspaceId` and `itemId`. Changing workspace invalidates the selected item so an item ID cannot leak across workspace context.
-7. Operation pages show inherited parameters explicitly and identify mandatory parameters that still need operator input, such as `jobType`.
-8. Preview generated PowerShell/REST execution when desired. Read operations can execute directly; allowlisted writes use Change Plans and the guarded-write broker.
-9. Inspect results as a sortable/filterable table or raw JSON. Export JSON or CSV as appropriate.
-10. Use **Change Plans**, **Activity Log**, **Sources** and **Diagnostics** to inspect approvals, execution history, provenance and runtime/compatibility health.
+3. Open **Project Composer** to inspect a reviewed architecture template. The Foil'o Wind RTI template is the first built-in project.
+4. For a new project, create a plan without selecting a workspace. For an existing project, select a workspace and let Composer diff desired items against live Fabric inventory.
+5. Project Composer is currently plan-only: it reports create / unchanged / conflict / unmanaged states and never deletes unmanaged items.
+6. Open **Workspaces** and refresh the live inventory.
+7. Select **Use workspace** on a workspace card. Recent workspace choices are remembered locally per tenant without credentials.
+8. Open **Items**. The selected workspace ID is injected automatically; select **Use item** once to establish item context.
+9. Item details, connections, runs and schedules inherit `workspaceId` and `itemId`. Changing workspace invalidates the selected item so an item ID cannot leak across workspace context.
+10. Operation pages show inherited parameters explicitly and identify mandatory parameters that still need operator input, such as `jobType`.
+11. Preview generated PowerShell/REST execution when desired. Read operations can execute directly; allowlisted writes use Change Plans and the guarded-write broker.
+12. Inspect results as a sortable/filterable table or raw JSON. Export JSON or CSV as appropriate.
+13. Use **Change Plans**, **Activity Log**, **Sources** and **Diagnostics** to inspect approvals, execution history, provenance and runtime/compatibility health.
 
 ## Local Windows launch
 
@@ -134,6 +138,7 @@ The launcher starts the API and UI in separate PowerShell 7 windows, then opens 
 ## Current top-level navigation
 
 - Overview
+- Project Composer
 - Workspaces
 - Change Plans
 - Items
@@ -153,7 +158,7 @@ Security, Assessment and Lineage currently expose their upstream workflow, prere
 
 ## UI principle
 
-The UI is an operations console, not a black box.
+The UI is a project and operations console, not a black box.
 
 For each operation, users should be able to see as applicable:
 
