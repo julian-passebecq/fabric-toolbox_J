@@ -233,6 +233,23 @@ export type ProjectPlan = {
   apply_note: string;
 };
 
+
+export type EventstreamDefinitionArtifact = {
+  template_id: string;
+  item_id: string;
+  display_name: string;
+  filename: string;
+  ready: boolean;
+  missing_requirements: string[];
+  live_inventory: boolean;
+  source_mode: string;
+  definition: Record<string, unknown>;
+  provenance: {
+    schema: string;
+    source: string;
+  };
+};
+
 export type ActivityRecord = Record<string, unknown> & { timestamp?: string; action?: string };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -340,4 +357,19 @@ export function planProject(
     method: 'POST',
     body: JSON.stringify({ ...(workspaceId ? { workspace_id: workspaceId } : {}), parameters }),
   });
+}
+
+
+export function getEventstreamDefinitionArtifact(
+  templateId: string,
+  workspaceId?: string,
+  parameters: Record<string, unknown> = {},
+) {
+  return request<EventstreamDefinitionArtifact>(
+    `/api/projects/templates/${encodeURIComponent(templateId)}/artifacts/eventstream`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ ...(workspaceId ? { workspace_id: workspaceId } : {}), parameters }),
+    },
+  );
 }
