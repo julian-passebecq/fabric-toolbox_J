@@ -1,0 +1,105 @@
+{
+  "id": "foilo-wind-rti",
+  "name": "Foil'o Wind Energy - Real-Time Fabric",
+  "version": "0.1.0",
+  "description": "End-to-end Fabric project for Oracle/Kafka wind-turbine telemetry, Real-Time Intelligence, medallion processing and engineering handoff.",
+  "workspace_name": "Foilo-Wind-Dev",
+  "workspace_description": "Foil'o wind-energy telemetry and Microsoft Fabric engineering workspace.",
+  "tags": ["foilo", "wind-energy", "kafka", "real-time-intelligence", "lakehouse"],
+  "items": [
+    {
+      "id": "rti-eventhouse",
+      "type": "Eventhouse",
+      "display_name": "foilo_rti",
+      "area": "Real-Time Intelligence",
+      "description": "Primary event analytics container for turbine telemetry.",
+      "definition_strategy": "configure-after-create"
+    },
+    {
+      "id": "rti-kql-database",
+      "type": "KQLDatabase",
+      "display_name": "wind_telemetry",
+      "area": "Real-Time Intelligence",
+      "description": "KQL database for turbine telemetry, alarms and operational state.",
+      "depends_on": ["rti-eventhouse"],
+      "definition_strategy": "definition"
+    },
+    {
+      "id": "rti-eventstream",
+      "type": "Eventstream",
+      "display_name": "wind_events",
+      "area": "Real-Time Intelligence",
+      "description": "Streaming topology for Oracle/Kafka turbine events into Fabric Real-Time Intelligence.",
+      "depends_on": ["rti-eventhouse", "rti-kql-database"],
+      "definition_strategy": "definition",
+      "vscode_handoff": true
+    },
+    {
+      "id": "rti-queryset",
+      "type": "KQLQueryset",
+      "display_name": "wind_operations",
+      "area": "Real-Time Intelligence",
+      "description": "Operational KQL queries for production, temperatures, vibration and alarms.",
+      "depends_on": ["rti-kql-database"],
+      "definition_strategy": "definition",
+      "vscode_handoff": true
+    },
+    {
+      "id": "rti-dashboard",
+      "type": "KQLDashboard",
+      "display_name": "wind_realtime_dashboard",
+      "area": "Real-Time Intelligence",
+      "description": "Real-time operations dashboard for the Foil'o turbine fleet.",
+      "depends_on": ["rti-kql-database", "rti-queryset"],
+      "definition_strategy": "definition",
+      "vscode_handoff": true
+    },
+    {
+      "id": "de-lakehouse",
+      "type": "Lakehouse",
+      "display_name": "foilo_lakehouse",
+      "area": "Data Engineering",
+      "description": "OneLake landing zone for Bronze, Silver and Gold turbine datasets.",
+      "definition_strategy": "empty"
+    },
+    {
+      "id": "de-environment",
+      "type": "Environment",
+      "display_name": "foilo_spark",
+      "area": "Data Engineering",
+      "description": "Fabric Spark environment for repeatable notebook execution.",
+      "definition_strategy": "configure-after-create",
+      "vscode_handoff": true
+    },
+    {
+      "id": "de-bronze-notebook",
+      "type": "Notebook",
+      "display_name": "bronze_ingestion",
+      "area": "Data Engineering",
+      "description": "Bronze ingestion and durable raw telemetry landing.",
+      "depends_on": ["de-lakehouse", "de-environment"],
+      "definition_strategy": "definition",
+      "vscode_handoff": true
+    },
+    {
+      "id": "de-silver-notebook",
+      "type": "Notebook",
+      "display_name": "silver_transform",
+      "area": "Data Engineering",
+      "description": "Telemetry parsing, quality checks and Silver transformations.",
+      "depends_on": ["de-lakehouse", "de-environment", "de-bronze-notebook"],
+      "definition_strategy": "definition",
+      "vscode_handoff": true
+    },
+    {
+      "id": "df-pipeline",
+      "type": "DataPipeline",
+      "display_name": "wind_ingestion_pipeline",
+      "area": "Data Factory",
+      "description": "Orchestrates ingestion and notebook processing for the wind project.",
+      "depends_on": ["de-bronze-notebook", "de-silver-notebook"],
+      "definition_strategy": "definition",
+      "vscode_handoff": true
+    }
+  ]
+}
