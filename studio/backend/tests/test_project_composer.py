@@ -278,3 +278,47 @@ def test_eventstream_artifact_api_exposes_definition_without_logging_secrets():
     assert response["filename"] == "eventstream.json"
     assert response["definition"]["destinations"][0]["properties"]["tableName"] == "telemetry_raw"
     assert "do-not-return" not in str(response)
+
+
+def test_existing_eventstream_exposes_guarded_definition_reconciliation():
+    template = get_project_template("foilo-wind-rti")
+    current = [
+        {"id": "eventhouse-1", "displayName": "foilo_rti", "type": "Eventhouse"},
+        {"id": "database-1", "displayName": "wind_telemetry", "type": "KQLDatabase"},
+        {"id": "eventstream-1", "displayName": "wind_events", "type": "Eventstream"},
+    ]
+
+    plan = plan_project(
+        template,
+        ProjectPlanRequest(workspace_id="workspace-1", current_items=current),
+    )
+    eventstream = next(action for action in plan.actions if action.item_id == "rti-eventstream")
+
+    assert eventstream.action == "unchanged"
+    assert eventstream.provisioning_ready is False
+    assert eventstream.reconciliation_ready is True
+    assert eventstream.reconciliation_capability_id == "ps-eventstream-update-fabriceventstreamdefinition"
+    assert eventstream.reconciliation_parameters == {
+        "WorkspaceId": "workspace-1",
+        "EventstreamId": "eventstream-1",
+    }
+    assert "guarded" in eventstream.reconciliation_reason.lower()
+
+
+def test_missing_eventstream_does_not_offer_definition_reconciliation():
+    template = get_project_template("foilo-wind-rti")
+    plan = plan_project(
+        template,
+        ProjectPlanRequest(
+            workspace_id="workspace-1",
+            current_items=[
+                {"id": "eventhouse-1", "displayName": "foilo_rti", "type": "Eventhouse"},
+                {"id": "database-1", "displayName": "wind_telemetry", "type": "KQLDatabase"},
+            ],
+        ),
+    )
+    eventstream = next(action for action in plan.actions if action.item_id == "rti-eventstream")
+
+    assert eventstream.action == "create"
+    assert eventstream.reconciliation_ready is False
+    assert eventstream.reconciliation_capability_id is None
