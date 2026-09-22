@@ -56,6 +56,7 @@ Additional controls:
 - Guarded writes require exact typed confirmation and use read-back verification where a verification capability is registered.
 - Live mutation plans and approval text remain memory-only. Durable history is reconstructed from the redacted activity log rather than restoring reusable approvals after restart.
 - Sensitive fields are redacted from local activity records.
+- Project manifests are desired-state handoffs only: secret values are omitted, imported secret values are ignored, and mutation plans/approval text are never serialized.
 - Specialized tools keep separate execution boundaries when they require additional authentication, permissions, dependencies or output lifecycles.
 
 ### Currently allowlisted writes
@@ -113,7 +114,7 @@ A feature record should make it possible to answer:
 2. Connect to a Fabric tenant with the tenant ID.
 3. Open **Project Composer** to inspect a reviewed architecture template. The Foil'o Wind RTI template is the first built-in project.
 4. For a new project, create a plan without selecting a workspace. For an existing project, select a workspace and let Composer diff desired items against live Fabric inventory.
-5. Composer reports create / unchanged / conflict / unmanaged states and never deletes unmanaged items.
+5. Composer reports create / unchanged / conflict / unmanaged states and never deletes unmanaged items. Use **Export manifest** for a portable desired-state JSON or **Import manifest** to restore the reviewed template, non-secret parameters and workspace target.
 6. With a target workspace selected, Composer calculates the current **Deployment wave** from dependency-ready creates and definition reconciliations. **Stage current wave** creates separate tenant-bound Change Plans; staging never executes a Fabric mutation.
 7. Open **Review individual approvals**. In **Change Plans**, run upstream `-WhatIf`, review each exact command, type that plan's confirmation text and execute plans individually. Studio deliberately provides no approve-all or execute-wave shortcut.
 8. Return to Composer and choose **Refresh after approvals**. The live inventory is re-planned and newly satisfied dependencies unlock the next wave. Engineering waves now generate and bind the Foil'o Bronze/Silver Notebook source, then reconcile the Data Pipeline once both Notebook IDs exist.
