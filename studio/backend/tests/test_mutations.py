@@ -296,3 +296,53 @@ def test_artifact_binding_rejects_path_traversal_filename(monkeypatch, tmp_path)
                 )
             ],
         )
+
+
+def test_guarded_eventstream_definition_update_binds_artifact_and_reads_back(monkeypatch, tmp_path):
+    broker = MutationBroker()
+    monkeypatch.setattr(runtime, "status", lambda: _connected())
+    monkeypatch.setattr(mutation_module, "ARTIFACT_ROOT", tmp_path)
+
+    seen = {}
+
+    def validate(capability, parameters):
+        seen["validate"] = (capability.command, dict(parameters))
+        return {"success": True, "mode": "what-if"}
+
+    def execute(capability, parameters):
+        seen["execute"] = (capability.command, dict(parameters))
+        return {"success": True}
+
+    def read(capability, parameters):
+        seen["read"] = (capability.command, dict(parameters))
+        return {"definition": {"parts": [{"path": "eventstream.json"}]}}
+
+    monkeypatch.setattr(runtime, "validate_guarded_write", validate)
+    monkeypatch.setattr(runtime, "execute_guarded_write", execute)
+    monkeypatch.setattr(runtime, "execute_read", read)
+
+    update = next(item for item in combined_catalog() if item.command == "Update-FabricEventstreamDefinition")
+    plan = broker.create_plan(
+        update,
+        {"WorkspaceId": "ws-1", "EventstreamId": "eventstream-1"},
+        artifacts=[
+            MutationArtifactRequest(
+                parameter="EventstreamPathDefinition",
+                filename="eventstream.json",
+                content='{"sources":[],"destinations":[],"streams":[],"operators":[],"compatibilityLevel":"1.1"}',
+            )
+        ],
+    )
+
+    assert plan.artifacts[0].parameter == "EventstreamPathDefinition"
+    validation = broker.validate(plan.plan_id)
+    result = broker.execute(plan.plan_id, validation.plan.confirmation_text)
+
+    assert seen["validate"][0] == "Update-FabricEventstreamDefinition"
+    assert seen["execute"][0] == "Update-FabricEventstreamDefinition"
+    assert seen["read"] == (
+        "Get-FabricEventstreamDefinition",
+        {"WorkspaceId": "ws-1", "EventstreamId": "eventstream-1"},
+    )
+    assert result.verification["definition"]["parts"][0]["path"] == "eventstream.json"
+    assert not (tmp_path / plan.plan_id).exists()
