@@ -318,7 +318,7 @@ export function App() {
   }
 
   function renderSection() {
-    if (section === 'Project Composer') return <ProjectComposerPage connected={connected} workspaceContext={workspaceContext} />;
+    if (section === 'Project Composer') return <ProjectComposerPage connected={connected} workspaceContext={workspaceContext} onOpenChangePlans={() => setSection('Change Plans')} />;
     if (section === 'Provisioning') {
       return (
         <OperationsPage
