@@ -1,5 +1,16 @@
 # Studio changelog
 
+## 0.10.0
+
+- Added guarded provisioning for KQL Database through upstream `New-FabricKQLDatabase`, including explicit ReadWrite/Shortcut type validation, parent Eventhouse binding and name-based read-back verification.
+- Added guarded provisioning for KQL Dashboard through upstream `New-FabricKQLDashboard` with the existing WhatIf, typed-approval and read-back safety contract.
+- Extended Foil'o Project Composer plans with provisioning capability IDs, exact upstream parameters, readiness state and dependency reasons.
+- Added dependency-aware deployment waves: Composer only stages create plans when the target workspace exists and all declared dependencies are already present in Fabric.
+- Resolved the live parent Eventhouse Fabric item ID into `parentEventhouseId` for the Foil'o `wind_telemetry` KQL database.
+- Added Composer staging into the existing Change Plans broker. Staging creates tenant-bound mutation plans only; it never executes Fabric changes directly.
+- Preserved unmanaged workspace items and conflicts as non-mutating plan states.
+- Added regression coverage for KQL Database/Dashboard guarded commands, parent binding and first/next Foil'o provisioning waves.
+
 ## 0.9.0
 
 - Added a dedicated Guarded Provisioning surface for selected Fabric item creation.
@@ -8,8 +19,7 @@
 - Required upstream SupportsShouldProcess / -WhatIf validation and registered name-based read-back verification for every newly enabled item type.
 - Fixed PowerShell parameter rendering so Boolean value parameters such as LakehouseEnableSchemas render as $true/$false while switch parameters retain switch semantics.
 - Added fail-fast validation for upstream mandatory parameters and ValidateSet values before PowerShell execution.
-- Kept KQL Database gated until Project Composer can resolve the parent Eventhouse item ID in dependency order.
-- Kept KQL Dashboard gated because the current upstream MicrosoftFabricMgmt module exposes read coverage but not a matching create cmdlet.
+- KQL Database and KQL Dashboard were intentionally left gated in v0.9 and are enabled in v0.10 after dependency/read-back review.
 
 
 ## 0.8.0
