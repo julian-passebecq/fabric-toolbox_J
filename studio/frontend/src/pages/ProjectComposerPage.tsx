@@ -155,6 +155,16 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
   );
 
 
+  const pendingWaveCount = unstagedReadyCreates.length + unstagedReadyReconciliations.length;
+  const stagedWaveCount = stagedItemIds.length + stagedReconciliationItemIds.length;
+  const blockedCreates = useMemo(
+    () => (plan?.actions ?? []).filter(
+      (action) => action.action === 'create' && !action.provisioning_ready,
+    ),
+    [plan],
+  );
+
+
   async function handlePlan() {
     if (!template) return;
     setPlanning(true);
@@ -172,6 +182,63 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
     }
   }
 
+  async function refreshAfterApprovals() {
+    await handlePlan();
+    setAcceptance(null);
+  }
+
+  async function stageCreateAction(action: ProjectPlanAction) {
+    if (!action.provisioning_capability_id) return;
+    let artifacts: MutationArtifactInput[] = [];
+    if (action.item_type === 'Eventstream') {
+      const artifact = await getEventstreamDefinitionArtifact(
+        template.id,
+        workspaceContext?.id,
+        parameterValues,
+      );
+      setEventstreamArtifact(artifact);
+      if (!artifact.ready) {
+        throw new Error(
+          `Eventstream definition is not ready: ${artifact.missing_requirements.join(', ')}`,
+        );
+      }
+      artifacts = [{
+        parameter: 'EventstreamPathDefinition',
+        filename: artifact.filename,
+        content: JSON.stringify(artifact.definition, null, 2),
+      }];
+    }
+    await createMutationPlan(
+      action.provisioning_capability_id,
+      action.provisioning_parameters,
+      artifacts,
+    );
+  }
+
+  async function stageReconciliationAction(action: ProjectPlanAction) {
+    if (!action.reconciliation_capability_id) return;
+    const artifact = await getEventstreamDefinitionArtifact(
+      template.id,
+      workspaceContext?.id,
+      parameterValues,
+    );
+    setEventstreamArtifact(artifact);
+    if (!artifact.ready) {
+      throw new Error(
+        `Eventstream definition is not ready: ${artifact.missing_requirements.join(', ')}`,
+      );
+    }
+    await createMutationPlan(
+      action.reconciliation_capability_id,
+      action.reconciliation_parameters,
+      [{
+        parameter: 'EventstreamPathDefinition',
+        filename: artifact.filename,
+        content: JSON.stringify(artifact.definition, null, 2),
+      }],
+    );
+  }
+
   async function handleStageReady() {
     if (!unstagedReadyCreates.length) return;
     setStaging(true);
@@ -179,32 +246,7 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
     const staged: string[] = [];
     try {
       for (const action of unstagedReadyCreates) {
-        if (!action.provisioning_capability_id) continue;
-        let artifacts: MutationArtifactInput[] = [];
-        if (action.item_type === 'Eventstream') {
-          const artifact = await getEventstreamDefinitionArtifact(
-            template.id,
-            workspaceContext?.id,
-            parameterValues,
-          );
-          setEventstreamArtifact(artifact);
-          if (!artifact.ready) {
-            throw new Error(
-              `Eventstream definition is not ready: ${artifact.missing_requirements.join(', ')}`,
-            );
-          }
-          artifacts = [{
-            parameter: 'EventstreamPathDefinition',
-            filename: artifact.filename,
-            content: JSON.stringify(artifact.definition, null, 2),
-          }];
-        }
-
-        await createMutationPlan(
-          action.provisioning_capability_id,
-          action.provisioning_parameters,
-          artifacts,
-        );
+        await stageCreateAction(action);
         staged.push(action.item_id);
       }
       setStagedItemIds((current) => Array.from(new Set([...current, ...staged])));
@@ -217,38 +259,44 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
   }
 
   async function handleStageReconciliations() {
-    if (!template || !unstagedReadyReconciliations.length) return;
+    if (!unstagedReadyReconciliations.length) return;
     setStaging(true);
     setError('');
     const staged: string[] = [];
     try {
       for (const action of unstagedReadyReconciliations) {
-        if (!action.reconciliation_capability_id) continue;
-        const artifact = await getEventstreamDefinitionArtifact(
-          template.id,
-          workspaceContext?.id,
-          parameterValues,
-        );
-        setEventstreamArtifact(artifact);
-        if (!artifact.ready) {
-          throw new Error(
-            `Eventstream definition is not ready: ${artifact.missing_requirements.join(', ')}`,
-          );
-        }
-        await createMutationPlan(
-          action.reconciliation_capability_id,
-          action.reconciliation_parameters,
-          [{
-            parameter: 'EventstreamPathDefinition',
-            filename: artifact.filename,
-            content: JSON.stringify(artifact.definition, null, 2),
-          }],
-        );
+        await stageReconciliationAction(action);
         staged.push(action.item_id);
       }
       setStagedReconciliationItemIds((current) => Array.from(new Set([...current, ...staged])));
     } catch (err) {
       setStagedReconciliationItemIds((current) => Array.from(new Set([...current, ...staged])));
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setStaging(false);
+    }
+  }
+
+  async function handleStageCurrentWave() {
+    if (!template || pendingWaveCount === 0) return;
+    setStaging(true);
+    setError('');
+    const stagedCreates: string[] = [];
+    const stagedReconciliations: string[] = [];
+    try {
+      for (const action of unstagedReadyCreates) {
+        await stageCreateAction(action);
+        stagedCreates.push(action.item_id);
+      }
+      for (const action of unstagedReadyReconciliations) {
+        await stageReconciliationAction(action);
+        stagedReconciliations.push(action.item_id);
+      }
+      setStagedItemIds((current) => Array.from(new Set([...current, ...stagedCreates])));
+      setStagedReconciliationItemIds((current) => Array.from(new Set([...current, ...stagedReconciliations])));
+    } catch (err) {
+      setStagedItemIds((current) => Array.from(new Set([...current, ...stagedCreates])));
+      setStagedReconciliationItemIds((current) => Array.from(new Set([...current, ...stagedReconciliations])));
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setStaging(false);
@@ -474,6 +522,49 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
         </div>
       )}
       {error && <div className={styles.warning}><Text>{error}</Text></div>}
+
+      {plan && (
+        <Card className={styles.section}>
+          <CardHeader
+            header={<Subtitle1>Deployment wave</Subtitle1>}
+            description={
+              <Text>
+                Stage everything that is dependency-ready now, then approve each Change Plan individually.
+              </Text>
+            }
+          />
+          <div className={styles.row}>
+            <Badge appearance={pendingWaveCount > 0 ? 'tint' : 'outline'}>
+              {pendingWaveCount} READY
+            </Badge>
+            <Badge appearance={stagedWaveCount > 0 ? 'filled' : 'outline'}>
+              {stagedWaveCount} STAGED
+            </Badge>
+            <Badge appearance="outline">{blockedCreates.length} BLOCKED BY DEPENDENCIES</Badge>
+          </div>
+          <div className={styles.row}>
+            <Button
+              appearance="primary"
+              disabled={staging || pendingWaveCount === 0}
+              onClick={handleStageCurrentWave}
+            >
+              {staging ? 'Staging wave…' : pendingWaveCount > 0 ? `Stage current wave (${pendingWaveCount})` : 'No actions ready'}
+            </Button>
+            {stagedWaveCount > 0 && (
+              <Button appearance="secondary" onClick={onOpenChangePlans}>
+                Review individual approvals
+              </Button>
+            )}
+            <Button appearance="secondary" disabled={planning || !workspaceContext || !connected} onClick={refreshAfterApprovals}>
+              Refresh after approvals
+            </Button>
+          </div>
+          <Text block size={200} className={styles.muted}>
+            Studio never approves or executes a wave as a batch. Each staged mutation keeps its own WhatIf validation,
+            confirmation text, expiry, verification and artifact binding.
+          </Text>
+        </Card>
+      )}
 
       {plan && plan.missing_parameters.length > 0 && (
         <div className={styles.warning}>
