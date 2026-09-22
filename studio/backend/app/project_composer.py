@@ -85,6 +85,9 @@ def _resolve_parameters(template: ProjectTemplate, supplied: dict[str, Any]) -> 
         value = supplied.get(parameter.name, parameter.default)
         if parameter.required and value in (None, ""):
             missing.append(parameter.name)
+        if parameter.allowed_values and value not in (None, "") and str(value) not in parameter.allowed_values:
+            allowed = ", ".join(parameter.allowed_values)
+            raise ValueError(f"Invalid value for {parameter.name}; allowed values: {allowed}")
         if parameter.secret and value not in (None, ""):
             resolved[parameter.name] = "***"
         else:
