@@ -115,14 +115,14 @@ A feature record should make it possible to answer:
 6. With a target workspace selected, Composer marks only dependency-ready creates as **Ready to stage**. Stage those resources into **Change Plans**; staging does not execute a Fabric mutation.
 7. In **Change Plans**, run upstream `-WhatIf`, review the exact command, type the plan confirmation and execute the selected plans.
 8. Refresh Composer after each successful wave. Newly created dependencies unlock the next wave (for example Eventhouse -> KQL Database -> Eventstream/query/dashboard).
-16. Run **deployment acceptance** for Foil'o once the RTI core exists. Studio verifies Eventhouse, KQL Database, Eventstream and Lakehouse presence, reads the deployed `eventstream.json`, and compares its canonical topology hash with the generated desired definition without returning the live definition body to the UI.
-9. Open **Workspaces** and refresh the live inventory whenever workspace context needs to change.
-10. Select **Use workspace** on a workspace card. Recent workspace choices are remembered locally per tenant without credentials.
-11. Open **Items**. The selected workspace ID is injected automatically; select **Use item** once to establish item context.
-12. Item details, connections, runs and schedules inherit `workspaceId` and `itemId`. Changing workspace invalidates the selected item so an item ID cannot leak across workspace context.
-13. Operation pages show inherited parameters explicitly and identify mandatory context still requiring operator input.
-14. Inspect results as a sortable/filterable table or raw JSON. Export JSON or CSV as appropriate.
-15. Use **Change Plans**, **Activity Log**, **Sources** and **Diagnostics** to inspect approvals, execution history, provenance and runtime/compatibility health.
+9. Run **deployment acceptance** for Foil'o once the RTI core exists. Studio verifies Eventhouse, KQL Database, Eventstream and Lakehouse presence, reads the deployed `eventstream.json`, and compares its canonical topology hash with the generated desired definition without returning the live definition body to the UI.
+10. Open **Workspaces** and refresh the live inventory whenever workspace context needs to change.
+11. Select **Use workspace** on a workspace card. Recent workspace choices are remembered locally per tenant without credentials.
+12. Open **Items**. The selected workspace ID is injected automatically; select **Use item** once to establish item context.
+13. Item details, connections, runs and schedules inherit `workspaceId` and `itemId`. Changing workspace invalidates the selected item so an item ID cannot leak across workspace context.
+14. Operation pages show inherited parameters explicitly and identify mandatory context still requiring operator input.
+15. Inspect results as a sortable/filterable table or raw JSON. Export JSON or CSV as appropriate.
+16. Use **Change Plans**, **Activity Log**, **Sources** and **Diagnostics** to inspect approvals, execution history, provenance and runtime/compatibility health.
 
 ## Local Windows launch
 
