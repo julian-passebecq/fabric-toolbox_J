@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   EventstreamDefinitionArtifact,
   MutationArtifactInput,
+  ProjectAcceptanceReport,
   ProjectPlan,
   ProjectPlanAction,
   ProjectTemplate,
@@ -23,6 +24,7 @@ import {
   getEventstreamDefinitionArtifact,
   getProjectTemplates,
   planProject,
+  runProjectAcceptance,
 } from '../api/client';
 
 type WorkspaceContext = { id: string; name: string };
@@ -50,6 +52,13 @@ function actionAppearance(action?: ProjectPlanAction['action']) {
   return 'outline';
 }
 
+
+function acceptanceAppearance(status: 'pass' | 'fail' | 'warning') {
+  if (status === 'pass') return 'tint';
+  if (status === 'fail') return 'filled';
+  return 'outline';
+}
+
 export function ProjectComposerPage({ connected, workspaceContext, onOpenChangePlans }: Props) {
   const styles = useStyles();
   const [templates, setTemplates] = useState<ProjectTemplate[]>([]);
@@ -63,6 +72,8 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
   const [stagedReconciliationItemIds, setStagedReconciliationItemIds] = useState<string[]>([]);
   const [eventstreamArtifact, setEventstreamArtifact] = useState<EventstreamDefinitionArtifact | null>(null);
   const [artifactLoading, setArtifactLoading] = useState(false);
+  const [acceptance, setAcceptance] = useState<ProjectAcceptanceReport | null>(null);
+  const [acceptanceLoading, setAcceptanceLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -98,7 +109,13 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
     setStagedItemIds([]);
     setStagedReconciliationItemIds([]);
     setEventstreamArtifact(null);
+    setAcceptance(null);
   }, [template]);
+
+
+  useEffect(() => {
+    setAcceptance(null);
+  }, [workspaceContext?.id]);
 
   const planById = useMemo(() => {
     const map = new Map<string, ProjectPlanAction>();
@@ -258,6 +275,26 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
     await navigator.clipboard.writeText(JSON.stringify(eventstreamArtifact.definition, null, 2));
   }
 
+
+  async function handleAcceptance() {
+    if (!template || !workspaceContext) return;
+    setAcceptanceLoading(true);
+    setError('');
+    try {
+      const report = await runProjectAcceptance(
+        template.id,
+        workspaceContext.id,
+        parameterValues,
+      );
+      setAcceptance(report);
+    } catch (err) {
+      setAcceptance(null);
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAcceptanceLoading(false);
+    }
+  }
+
   async function copyVsCodeHandoff() {
     if (!template) return;
     const safeParameters = Object.fromEntries(
@@ -302,6 +339,9 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
           <Button appearance="secondary" disabled={artifactLoading || !workspaceContext || !connected} onClick={handleEventstreamArtifact}>
             {artifactLoading ? 'Rendering…' : 'Render eventstream.json'}
           </Button>
+          <Button appearance="secondary" disabled={acceptanceLoading || !workspaceContext || !connected} onClick={handleAcceptance}>
+            {acceptanceLoading ? 'Checking…' : 'Run deployment acceptance'}
+          </Button>
         </div>
       </div>
 
@@ -329,6 +369,57 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
           {template.tags.map((tag) => <Badge key={tag} appearance="outline">{tag}</Badge>)}
         </div>
       </Card>
+
+      {acceptance && (
+        <section className={styles.section}>
+          <Card>
+            <CardHeader
+              header={<Subtitle1>Foil'o deployment acceptance</Subtitle1>}
+              description={
+                <Text>
+                  {acceptance.accepted
+                    ? 'PASS — live RTI core and Eventstream topology match the project definition.'
+                    : 'FAIL — one or more deployment checks need attention.'}
+                </Text>
+              }
+            />
+            <div className={styles.row}>
+              <Badge appearance={acceptance.accepted ? 'tint' : 'filled'}>
+                {acceptance.status.toUpperCase()}
+              </Badge>
+              {acceptance.definition_match !== undefined && (
+                <Badge appearance={acceptance.definition_match ? 'tint' : 'filled'}>
+                  EVENTSTREAM {acceptance.definition_match ? 'MATCH' : 'DRIFT'}
+                </Badge>
+              )}
+            </div>
+            {(acceptance.desired_eventstream_sha256 || acceptance.live_eventstream_sha256) && (
+              <Text block size={200} className={styles.muted}>
+                Desired: {acceptance.desired_eventstream_sha256?.slice(0, 16) ?? 'n/a'} · Live: {acceptance.live_eventstream_sha256?.slice(0, 16) ?? 'n/a'}
+              </Text>
+            )}
+          </Card>
+          <div className={styles.cards}>
+            {acceptance.checks.map((check) => (
+              <Card key={check.id}>
+                <CardHeader
+                  header={<Subtitle1>{check.label}</Subtitle1>}
+                  description={<Text>{check.detail}</Text>}
+                />
+                <div className={styles.row}>
+                  <Badge appearance={acceptanceAppearance(check.status)}>{check.status.toUpperCase()}</Badge>
+                  {check.item_id && <Badge appearance="outline">ID {check.item_id}</Badge>}
+                </div>
+                {(check.expected || check.actual) && (
+                  <Text block size={200} className={styles.muted}>
+                    Expected: {check.expected?.slice(0, 24) ?? 'n/a'} · Actual: {check.actual?.slice(0, 24) ?? 'n/a'}
+                  </Text>
+                )}
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
 
       {eventstreamArtifact && (
         <div className={styles.warning}>
@@ -362,7 +453,10 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
               <Input
                 type={parameter.secret ? 'password' : 'text'}
                 value={String(parameterValues[parameter.name] ?? '')}
-                onChange={(_, data) => setParameterValues((current) => ({ ...current, [parameter.name]: data.value }))}
+                onChange={(_, data) => {
+                  setParameterValues((current) => ({ ...current, [parameter.name]: data.value }));
+                  setAcceptance(null);
+                }}
                 placeholder={parameter.required ? 'Required' : 'Optional'}
               />
               <div className={styles.row}>
