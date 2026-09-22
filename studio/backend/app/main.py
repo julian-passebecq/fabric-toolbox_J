@@ -20,7 +20,7 @@ from .models import (
     SessionStatus,
 )
 from .mutations import broker
-from .project_composer import get_project_template, list_project_templates, plan_project
+from .project_composer import build_eventstream_definition, get_project_template, list_project_templates, plan_project
 from .providers.fabric_rest import build_rest_get_command, execute_rest_read
 from .providers.microsoftfabricmgmt import (
     ProviderUnavailable,
@@ -331,6 +331,37 @@ def project_plan(template_id: str, request: ProjectPlanRequest | None = None) ->
         }
     )
     return plan
+
+
+@app.post("/api/projects/templates/{template_id}/artifacts/eventstream")
+def project_eventstream_artifact(template_id: str, request: ProjectPlanRequest | None = None) -> dict:
+    try:
+        template = get_project_template(template_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    try:
+        artifact = build_eventstream_definition(template, request or ProjectPlanRequest())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except UnsafeOperation as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ProviderUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    append_activity(
+        {
+            "action": "project.artifact.eventstream",
+            "template_id": template.id,
+            "workspace_id": (request.workspace_id if request else None),
+            "ready": artifact["ready"],
+            "missing_requirements": artifact["missing_requirements"],
+            "source_mode": artifact["source_mode"],
+        }
+    )
+    return artifact
 
 
 @app.get("/api/activity")
