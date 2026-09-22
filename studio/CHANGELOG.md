@@ -1,5 +1,14 @@
 # Studio changelog
 
+## 0.14.0
+
+- Added a guided Project Composer deployment-wave control that combines all currently dependency-ready creates and reconciliations into one staging action.
+- Preserved explicit per-plan safety: a wave is never approved or executed as a batch; every staged mutation still requires its own upstream `-WhatIf`, confirmation text and Change Plans execution.
+- Added live wave counters for ready, staged and dependency-blocked project actions.
+- Added a direct **Review individual approvals** handoff into Change Plans after staging.
+- Added **Refresh after approvals** so operators can immediately re-plan against live Fabric inventory and unlock the next dependency wave.
+- Reused the existing SHA-bound Eventstream definition artifact path when the current wave contains Eventstream create or reconciliation actions.
+
 ## 0.13.0
 
 - Added a read-only Foil'o deployment acceptance report for the selected live Fabric workspace.
