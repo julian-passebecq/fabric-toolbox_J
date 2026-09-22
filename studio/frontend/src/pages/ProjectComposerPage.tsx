@@ -144,7 +144,31 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
     try {
       for (const action of unstagedReadyCreates) {
         if (!action.provisioning_capability_id) continue;
-        await createMutationPlan(action.provisioning_capability_id, action.provisioning_parameters);
+        let artifacts = [];
+        if (action.item_type === 'Eventstream') {
+          const artifact = await getEventstreamDefinitionArtifact(
+            template.id,
+            workspaceContext?.id,
+            parameterValues,
+          );
+          setEventstreamArtifact(artifact);
+          if (!artifact.ready) {
+            throw new Error(
+              `Eventstream definition is not ready: ${artifact.missing_requirements.join(', ')}`,
+            );
+          }
+          artifacts = [{
+            parameter: 'EventstreamPathDefinition',
+            filename: artifact.filename,
+            content: JSON.stringify(artifact.definition, null, 2),
+          }];
+        }
+
+        await createMutationPlan(
+          action.provisioning_capability_id,
+          action.provisioning_parameters,
+          artifacts,
+        );
         staged.push(action.item_id);
       }
       setStagedItemIds((current) => Array.from(new Set([...current, ...staged])));
