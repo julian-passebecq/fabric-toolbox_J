@@ -1,10 +1,12 @@
 import base64
+import io
 import json
+import zipfile
 
 import pytest
 
 from app.models import ProjectManifestExportRequest, ProjectPlanRequest
-from app.project_composer import accept_project, build_eventstream_definition, build_project_item_definition_artifact, export_project_manifest, get_project_template, import_project_manifest, list_project_templates, plan_project
+from app.project_composer import accept_project, build_eventstream_definition, build_project_item_definition_artifact, build_vscode_handoff_files, export_project_manifest, get_project_template, import_project_manifest, list_project_templates, plan_project
 
 
 def test_foilo_template_covers_rti_and_engineering_items():
@@ -750,3 +752,101 @@ def test_project_manifest_api_roundtrip_stays_secret_safe():
     assert imported.workspace_id == "workspace-1"
     assert imported.parameters["kafka_password"] == ""
     assert "api-secret" not in imported.model_dump_json()
+
+
+def test_vscode_handoff_bundle_uses_supported_extensions_and_omits_secrets():
+    template = get_project_template("foilo-wind-rti")
+    bundle = build_vscode_handoff_files(
+        template,
+        ProjectManifestExportRequest(
+            workspace_id="workspace-1",
+            workspace_name="Foilo-Wind-Dev",
+            parameters={
+                "environment": "dev",
+                "kafka_password": "never-in-vscode-bundle",
+            },
+        ),
+    )
+
+    assert bundle["bundle_name"] == "foilo-wind-rti-dev"
+    assert bundle["workspace_id"] == "workspace-1"
+    assert set(bundle["files"]) == {
+        "foilo-wind-rti-dev.code-workspace",
+        ".vscode/extensions.json",
+        ".vscode/mcp.json",
+        "fabric-project.json",
+        "fabric-handoff.json",
+        "README.md",
+    }
+
+    extensions = json.loads(bundle["files"][".vscode/extensions.json"])
+    assert "fabric.vscode-fabric" in extensions["recommendations"]
+    assert "fabric.vscode-fabric-mcp-server" in extensions["recommendations"]
+    assert "GitHub.copilot-chat" in extensions["recommendations"]
+
+    mcp = json.loads(bundle["files"][".vscode/mcp.json"])
+    assert mcp["servers"]["fabric-core"] == {
+        "type": "http",
+        "url": "https://api.fabric.microsoft.com/v1/mcp/core",
+    }
+
+    handoff = json.loads(bundle["files"]["fabric-handoff.json"])
+    assert handoff["workspace"] == {
+        "id": "workspace-1",
+        "name": "Foilo-Wind-Dev",
+    }
+    assert handoff["deep_link"] is None
+    assert any(item["displayName"] == "bronze_ingestion" for item in handoff["authoring_items"])
+
+    serialized_files = "\n".join(bundle["files"].values())
+    assert "never-in-vscode-bundle" not in serialized_files
+    manifest = json.loads(bundle["files"]["fabric-project.json"])
+    assert manifest["parameters"]["kafka_password"] is None
+
+
+def test_vscode_handoff_api_returns_portable_zip_without_secret_material():
+    from app.main import project_vscode_handoff
+
+    response = project_vscode_handoff(
+        "foilo-wind-rti",
+        ProjectManifestExportRequest(
+            workspace_id="workspace-1",
+            workspace_name="Foilo-Wind-Dev",
+            parameters={
+                "environment": "test",
+                "kafka_password": "zip-secret",
+            },
+        ),
+    )
+
+    assert response.media_type == "application/zip"
+    assert response.headers["content-disposition"].endswith('foilo-wind-rti-test.zip"')
+    assert b"zip-secret" not in response.body
+
+    with zipfile.ZipFile(io.BytesIO(response.body), "r") as archive:
+        names = set(archive.namelist())
+        root = "foilo-wind-rti-test/"
+        assert root + "foilo-wind-rti-test.code-workspace" in names
+        assert root + ".vscode/extensions.json" in names
+        assert root + ".vscode/mcp.json" in names
+        assert root + "fabric-project.json" in names
+        assert root + "fabric-handoff.json" in names
+        assert root + "README.md" in names
+
+        manifest = json.loads(archive.read(root + "fabric-project.json"))
+        assert manifest["parameters"]["kafka_password"] is None
+        mcp = json.loads(archive.read(root + ".vscode/mcp.json"))
+        assert mcp["servers"]["fabric-core"]["url"] == "https://api.fabric.microsoft.com/v1/mcp/core"
+
+
+def test_vscode_handoff_bundle_without_selected_workspace_is_still_safe():
+    template = get_project_template("foilo-wind-rti")
+    bundle = build_vscode_handoff_files(
+        template,
+        ProjectManifestExportRequest(parameters={"environment": "dev"}),
+    )
+
+    handoff = json.loads(bundle["files"]["fabric-handoff.json"])
+    assert handoff["workspace"]["id"] is None
+    assert handoff["workspace"]["name"] == template.workspace_name
+    assert "not selected in Studio" in bundle["files"]["README.md"]
