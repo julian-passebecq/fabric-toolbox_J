@@ -112,9 +112,9 @@ A feature record should make it possible to answer:
 3. Open **Project Composer** to inspect a reviewed architecture template. The Foil'o Wind RTI template is the first built-in project.
 4. For a new project, create a plan without selecting a workspace. For an existing project, select a workspace and let Composer diff desired items against live Fabric inventory.
 5. Composer reports create / unchanged / conflict / unmanaged states and never deletes unmanaged items.
-6. With a target workspace selected, Composer marks only dependency-ready creates as **Ready to stage**. Stage those resources into **Change Plans**; staging does not execute a Fabric mutation.
-7. In **Change Plans**, run upstream `-WhatIf`, review the exact command, type the plan confirmation and execute the selected plans.
-8. Refresh Composer after each successful wave. Newly created dependencies unlock the next wave (for example Eventhouse -> KQL Database -> Eventstream/query/dashboard).
+6. With a target workspace selected, Composer calculates the current **Deployment wave** from dependency-ready creates and definition reconciliations. **Stage current wave** creates separate tenant-bound Change Plans; staging never executes a Fabric mutation.
+7. Open **Review individual approvals**. In **Change Plans**, run upstream `-WhatIf`, review each exact command, type that plan's confirmation text and execute plans individually. Studio deliberately provides no approve-all or execute-wave shortcut.
+8. Return to Composer and choose **Refresh after approvals**. The live inventory is re-planned and newly satisfied dependencies unlock the next wave (for example Eventhouse -> KQL Database -> Eventstream/query/dashboard).
 9. Run **deployment acceptance** for Foil'o once the RTI core exists. Studio verifies Eventhouse, KQL Database, Eventstream and Lakehouse presence, reads the deployed `eventstream.json`, and compares its canonical topology hash with the generated desired definition without returning the live definition body to the UI.
 10. Open **Workspaces** and refresh the live inventory whenever workspace context needs to change.
 11. Select **Use workspace** on a workspace card. Recent workspace choices are remembered locally per tenant without credentials.
