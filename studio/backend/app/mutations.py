@@ -309,14 +309,14 @@ class MutationBroker:
             raise UnsafeOperation("Confirmation text does not match the mutation plan")
 
         capability = self._capability(plan.capability_id)
-        self._verify_artifacts(plan)
-        # Reject terminal or otherwise invalid lifecycle states before validation gating.
+        # Reject terminal or otherwise invalid lifecycle states before artifact/validation checks.
         # This preserves single-use semantics and returns the most accurate state error
         # when a caller retries an already executed/failed plan.
         if plan.status not in {"planned", "validated"}:
             raise UnsafeOperation(f"Mutation plan cannot execute in status {plan.status}")
         if capability.supports_whatif and plan.status != "validated":
             raise UnsafeOperation("Run upstream -WhatIf validation before applying this mutation")
+        self._verify_artifacts(plan)
 
         # Mark before execution so a repeated HTTP request cannot reuse the plan.
         plan.status = "executing"
