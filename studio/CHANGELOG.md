@@ -1,5 +1,14 @@
 # Studio changelog
 
+## 0.12.0
+
+- Added reviewed read access for `Get-FabricEventstreamDefinition` through the upstream MicrosoftFabricMgmt module.
+- Added guarded `Update-FabricEventstreamDefinition` with upstream `-WhatIf`, typed approval and definition read-back verification.
+- Extended Project Composer plan actions with a separate Eventstream definition reconciliation state so an existing item is not assumed to have the desired topology.
+- Added a dedicated Composer action that stages the generated SHA-bound `eventstream.json` against an existing Eventstream without executing it directly.
+- Preserved artifact tamper detection, plan expiry, tenant binding, single-use semantics and terminal cleanup for definition updates.
+- Added backend regression coverage for catalog metadata, reconciliation planning and artifact-bound definition updates.
+
 ## 0.11.0
 
 - Added a generated Foil'o `eventstream.json` artifact that follows the current Microsoft Fabric Eventstream definition topology model.
