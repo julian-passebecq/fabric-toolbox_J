@@ -56,16 +56,38 @@ def _command_invocation(capability: Capability, parameters: dict[str, Any] | Non
     if unknown:
         raise ValueError(f"Unknown parameters for {capability.command}: {', '.join(unknown)}")
 
+    specs = {spec.name: spec for spec in capability.parameter_specs}
+    missing = sorted(
+        spec.name
+        for spec in capability.parameter_specs
+        if spec.mandatory and (spec.name not in provided or provided.get(spec.name) in (None, ""))
+    )
+    if missing:
+        raise ValueError(f"Missing mandatory parameters for {capability.command}: {', '.join(missing)}")
+
     args: list[str] = []
     for key, value in provided.items():
         if value is None:
             continue
         if not _PARAM_NAME_RE.fullmatch(key):
             raise ValueError(f"Invalid parameter name: {key}")
+
+        spec = specs.get(key)
+        if spec and spec.allowed_values and value not in (None, ""):
+            allowed_values = {item.casefold(): item for item in spec.allowed_values}
+            if str(value).casefold() not in allowed_values:
+                raise ValueError(
+                    f"Invalid value for {key}; allowed values: {', '.join(spec.allowed_values)}"
+                )
+
         if isinstance(value, bool):
-            if value:
-                args.append(f"-{key}")
+            if spec and spec.is_switch:
+                if value:
+                    args.append(f"-{key}")
+                continue
+            args.append(f"-{key} {_ps_literal(value)}")
             continue
+
         args.append(f"-{key} {_ps_literal(value)}")
 
     return " ".join(["&", _ps_literal(capability.command), *args])
