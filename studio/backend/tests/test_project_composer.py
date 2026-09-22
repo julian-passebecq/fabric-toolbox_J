@@ -4,7 +4,7 @@ import json
 import pytest
 
 from app.models import ProjectPlanRequest
-from app.project_composer import accept_project, build_eventstream_definition, get_project_template, list_project_templates, plan_project
+from app.project_composer import accept_project, build_eventstream_definition, build_project_item_definition_artifact, get_project_template, list_project_templates, plan_project
 
 
 def test_foilo_template_covers_rti_and_engineering_items():
@@ -468,3 +468,163 @@ def test_project_acceptance_api_returns_hashes_without_live_definition(monkeypat
     assert response.live_eventstream_sha256
     serialized = response.model_dump()
     assert "definition" not in serialized
+
+
+def _foilo_engineering_items():
+    return [
+        {"id": "lakehouse-1", "displayName": "foilo_lakehouse", "type": "Lakehouse"},
+        {"id": "environment-1", "displayName": "foilo_spark", "type": "Environment"},
+        {"id": "bronze-1", "displayName": "bronze_ingestion", "type": "Notebook"},
+        {"id": "silver-1", "displayName": "silver_transform", "type": "Notebook"},
+        {"id": "pipeline-1", "displayName": "wind_ingestion_pipeline", "type": "DataPipeline"},
+    ]
+
+
+def test_bronze_notebook_artifact_binds_live_lakehouse_environment_and_turbine():
+    template = get_project_template("foilo-wind-rti")
+    artifact = build_project_item_definition_artifact(
+        template,
+        "de-bronze-notebook",
+        ProjectPlanRequest(
+            workspace_id="workspace-1",
+            current_items=_foilo_engineering_items(),
+            parameters={"turbine_id": "FOILO-WT-042"},
+        ),
+    )
+
+    assert artifact["ready"] is True
+    assert artifact["item_type"] == "Notebook"
+    assert artifact["filename"] == "notebook-content.py"
+    assert artifact["artifact_parameter"] == "NotebookPathDefinition"
+    assert artifact["mutation_parameters"] == {"NotebookFormat": "fabricGitSource"}
+    assert artifact["content_sha256"]
+    assert "lakehouse-1" in artifact["content"]
+    assert "environment-1" in artifact["content"]
+    assert "workspace-1" in artifact["content"]
+    assert "FOILO-WT-042" in artifact["content"]
+    assert "bronze_turbine_telemetry" in artifact["content"]
+
+
+def test_silver_notebook_artifact_contains_quality_transform():
+    template = get_project_template("foilo-wind-rti")
+    artifact = build_project_item_definition_artifact(
+        template,
+        "de-silver-notebook",
+        ProjectPlanRequest(
+            workspace_id="workspace-1",
+            current_items=_foilo_engineering_items(),
+        ),
+    )
+
+    assert artifact["ready"] is True
+    assert "silver_turbine_telemetry" in artifact["content"]
+    assert 'dropDuplicates(["turbine_id", "event_time"])' in artifact["content"]
+    assert "wind_speed_ms" in artifact["content"]
+
+
+def test_pipeline_artifact_orchestrates_live_notebook_ids_in_order():
+    template = get_project_template("foilo-wind-rti")
+    artifact = build_project_item_definition_artifact(
+        template,
+        "df-pipeline",
+        ProjectPlanRequest(
+            workspace_id="workspace-1",
+            current_items=_foilo_engineering_items(),
+        ),
+    )
+
+    assert artifact["ready"] is True
+    assert artifact["item_type"] == "DataPipeline"
+    assert artifact["filename"] == "pipeline-content.json"
+    assert artifact["artifact_parameter"] is None
+
+    content = json.loads(artifact["content"])
+    activities = content["properties"]["activities"]
+    assert [activity["type"] for activity in activities] == ["TridentNotebook", "TridentNotebook"]
+    assert activities[0]["typeProperties"] == {
+        "notebookId": "bronze-1",
+        "workspaceId": "workspace-1",
+    }
+    assert activities[1]["typeProperties"] == {
+        "notebookId": "silver-1",
+        "workspaceId": "workspace-1",
+    }
+    assert activities[1]["dependsOn"] == [
+        {"activity": "bronze_ingestion", "dependencyConditions": ["Succeeded"]}
+    ]
+
+    definition = artifact["mutation_parameters"]["Definition"]
+    part = definition["parts"][0]
+    assert part["path"] == "pipeline-content.json"
+    assert part["payloadType"] == "InlineBase64"
+    decoded = base64.b64decode(part["payload"]).decode("utf-8")
+    assert json.loads(decoded) == content
+
+
+def test_notebook_and_pipeline_existing_items_expose_definition_reconciliation():
+    template = get_project_template("foilo-wind-rti")
+    plan = plan_project(
+        template,
+        ProjectPlanRequest(
+            workspace_id="workspace-1",
+            current_items=_foilo_engineering_items(),
+        ),
+    )
+    by_id = {action.item_id: action for action in plan.actions}
+
+    bronze = by_id["de-bronze-notebook"]
+    silver = by_id["de-silver-notebook"]
+    pipeline = by_id["df-pipeline"]
+
+    assert bronze.reconciliation_ready is True
+    assert bronze.reconciliation_capability_id == "ps-notebook-update-fabricnotebookdefinition"
+    assert bronze.reconciliation_parameters == {
+        "WorkspaceId": "workspace-1",
+        "NotebookId": "bronze-1",
+        "NotebookFormat": "fabricGitSource",
+    }
+
+    assert silver.reconciliation_ready is True
+    assert silver.reconciliation_capability_id == "ps-notebook-update-fabricnotebookdefinition"
+
+    assert pipeline.reconciliation_ready is True
+    assert pipeline.reconciliation_capability_id == "ps-data-pipeline-update-fabricdatapipelinedefinition"
+    assert pipeline.reconciliation_parameters == {
+        "WorkspaceId": "workspace-1",
+        "DataPipelineId": "pipeline-1",
+    }
+
+
+def test_notebook_create_plan_declares_fabric_git_source_format():
+    template = get_project_template("foilo-wind-rti")
+    plan = plan_project(
+        template,
+        ProjectPlanRequest(
+            workspace_id="workspace-1",
+            current_items=[
+                {"id": "lakehouse-1", "displayName": "foilo_lakehouse", "type": "Lakehouse"},
+                {"id": "environment-1", "displayName": "foilo_spark", "type": "Environment"},
+            ],
+        ),
+    )
+    bronze = next(action for action in plan.actions if action.item_id == "de-bronze-notebook")
+
+    assert bronze.provisioning_ready is True
+    assert bronze.provisioning_parameters["NotebookFormat"] == "fabricGitSource"
+
+
+def test_project_item_artifact_api_returns_definition_without_mutating():
+    from app.main import project_item_definition_artifact
+
+    response = project_item_definition_artifact(
+        "foilo-wind-rti",
+        "df-pipeline",
+        ProjectPlanRequest(
+            workspace_id="workspace-1",
+            current_items=_foilo_engineering_items(),
+        ),
+    )
+
+    assert response["ready"] is True
+    assert response["content_sha256"]
+    assert response["mutation_parameters"]["Definition"]["parts"][0]["path"] == "pipeline-content.json"
