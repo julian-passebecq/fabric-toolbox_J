@@ -3,8 +3,8 @@ import json
 
 import pytest
 
-from app.models import ProjectPlanRequest
-from app.project_composer import accept_project, build_eventstream_definition, build_project_item_definition_artifact, get_project_template, list_project_templates, plan_project
+from app.models import ProjectManifestExportRequest, ProjectPlanRequest
+from app.project_composer import accept_project, build_eventstream_definition, build_project_item_definition_artifact, export_project_manifest, get_project_template, import_project_manifest, list_project_templates, plan_project
 
 
 def test_foilo_template_covers_rti_and_engineering_items():
@@ -628,3 +628,125 @@ def test_project_item_artifact_api_returns_definition_without_mutating():
     assert response["ready"] is True
     assert response["content_sha256"]
     assert response["mutation_parameters"]["Definition"]["parts"][0]["path"] == "pipeline-content.json"
+
+
+def test_project_manifest_export_omits_secret_values_and_is_deterministic():
+    template = get_project_template("foilo-wind-rti")
+    manifest = export_project_manifest(
+        template,
+        ProjectManifestExportRequest(
+            workspace_id="workspace-1",
+            workspace_name="Foilo-Wind-Dev",
+            parameters={
+                "environment": "test",
+                "kafka_topic": "foil.custom.telemetry",
+                "kafka_password": "must-never-leak",
+            },
+        ),
+    )
+
+    assert manifest.schema_version == 1
+    assert manifest.template_id == "foilo-wind-rti"
+    assert manifest.template_version == template.version
+    assert len(manifest.template_sha256) == 64
+    assert manifest.workspace_id == "workspace-1"
+    assert manifest.workspace_name == "Foilo-Wind-Dev"
+    assert manifest.parameters["environment"] == "test"
+    assert manifest.parameters["kafka_topic"] == "foil.custom.telemetry"
+    assert manifest.parameters["kafka_password"] is None
+    assert "kafka_password" in manifest.secret_parameters
+    assert manifest.items == template.items
+    assert "must-never-leak" not in manifest.model_dump_json()
+
+
+def test_project_manifest_roundtrip_restores_safe_state_but_not_secrets():
+    template = get_project_template("foilo-wind-rti")
+    manifest = export_project_manifest(
+        template,
+        ProjectManifestExportRequest(
+            workspace_id="workspace-42",
+            workspace_name="Foilo Wind Imported",
+            parameters={
+                "environment": "prod",
+                "turbine_id": "FOILO-WT-099",
+                "kafka_password": "secret-before-export",
+            },
+        ),
+    )
+
+    imported = import_project_manifest(manifest)
+
+    assert imported.template_id == template.id
+    assert imported.imported_template_version == template.version
+    assert imported.current_template_version == template.version
+    assert imported.workspace_id == "workspace-42"
+    assert imported.workspace_name == "Foilo Wind Imported"
+    assert imported.parameters["environment"] == "prod"
+    assert imported.parameters["turbine_id"] == "FOILO-WT-099"
+    assert imported.parameters["kafka_password"] == ""
+    assert imported.secret_parameters == ["kafka_password"]
+    assert imported.warnings == []
+
+
+def test_project_manifest_import_ignores_manually_injected_secret():
+    template = get_project_template("foilo-wind-rti")
+    manifest = export_project_manifest(
+        template,
+        ProjectManifestExportRequest(parameters={"environment": "dev"}),
+    )
+    manifest.parameters["kafka_password"] = "injected-secret"
+
+    imported = import_project_manifest(manifest)
+
+    assert imported.parameters["kafka_password"] == ""
+    assert any("ignored" in warning.lower() and "kafka_password" in warning for warning in imported.warnings)
+    assert "injected-secret" not in imported.model_dump_json()
+
+
+def test_project_manifest_import_warns_when_template_version_hash_or_graph_drift():
+    template = get_project_template("foilo-wind-rti")
+    manifest = export_project_manifest(template, ProjectManifestExportRequest())
+    manifest.template_version = "0.0.1"
+    manifest.template_sha256 = "0" * 64
+    manifest.items = manifest.items[:-1]
+
+    imported = import_project_manifest(manifest)
+
+    assert any("version differs" in warning.lower() for warning in imported.warnings)
+    assert any("content differs" in warning.lower() for warning in imported.warnings)
+    assert any("item graph differs" in warning.lower() for warning in imported.warnings)
+
+
+def test_project_manifest_import_rejects_unknown_or_invalid_parameters():
+    template = get_project_template("foilo-wind-rti")
+    manifest = export_project_manifest(template, ProjectManifestExportRequest())
+
+    manifest.parameters["not_registered"] = "x"
+    with pytest.raises(ValueError, match="Unknown manifest parameters"):
+        import_project_manifest(manifest)
+
+    manifest = export_project_manifest(template, ProjectManifestExportRequest())
+    manifest.parameters["environment"] = "invalid"
+    with pytest.raises(ValueError, match="allowed values"):
+        import_project_manifest(manifest)
+
+
+def test_project_manifest_api_roundtrip_stays_secret_safe():
+    from app.main import project_manifest_export, project_manifest_import
+
+    manifest = project_manifest_export(
+        "foilo-wind-rti",
+        ProjectManifestExportRequest(
+            workspace_id="workspace-1",
+            workspace_name="Foilo-Wind-Dev",
+            parameters={"kafka_password": "api-secret", "environment": "dev"},
+        ),
+    )
+
+    assert manifest.parameters["kafka_password"] is None
+    assert "api-secret" not in manifest.model_dump_json()
+
+    imported = project_manifest_import(manifest)
+    assert imported.workspace_id == "workspace-1"
+    assert imported.parameters["kafka_password"] == ""
+    assert "api-secret" not in imported.model_dump_json()
