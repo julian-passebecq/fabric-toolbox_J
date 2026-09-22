@@ -226,6 +226,30 @@
       "type": "string",
       "required": false,
       "default": ""
+    },
+    {
+      "name": "kafka_connection_id",
+      "label": "Fabric Kafka connection ID",
+      "description": "Required only for direct-kafka-source mode. This is the Fabric connection resource referenced by the ApacheKafka Eventstream source.",
+      "type": "string",
+      "required": false,
+      "default": ""
+    },
+    {
+      "name": "kafka_consumer_group",
+      "label": "Kafka consumer group",
+      "description": "Consumer group used when Fabric reads directly from the Oracle Kafka broker through a registered Fabric connection.",
+      "type": "string",
+      "required": false,
+      "default": "foilo-fabric-consumer"
+    },
+    {
+      "name": "kql_table_name",
+      "label": "KQL destination table",
+      "description": "Target KQL table name used by the generated Eventhouse destination in eventstream.json.",
+      "type": "string",
+      "required": true,
+      "default": "turbine_telemetry"
     }
   ]
 }
