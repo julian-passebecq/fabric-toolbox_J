@@ -228,7 +228,9 @@ def test_selected_fabric_item_creates_are_explicit_guarded_writes():
     expected = {
         "New-FabricEventhouse": ("Get-FabricEventhouse", {"WorkspaceId": "WorkspaceId", "EventhouseName": "EventhouseName"}),
         "New-FabricEventstream": ("Get-FabricEventstream", {"WorkspaceId": "WorkspaceId", "EventstreamName": "EventstreamName"}),
+        "New-FabricKQLDatabase": ("Get-FabricKQLDatabase", {"WorkspaceId": "WorkspaceId", "KQLDatabaseName": "KQLDatabaseName"}),
         "New-FabricKQLQueryset": ("Get-FabricKQLQueryset", {"WorkspaceId": "WorkspaceId", "KQLQuerysetName": "KQLQuerysetName"}),
+        "New-FabricKQLDashboard": ("Get-FabricKQLDashboard", {"WorkspaceId": "WorkspaceId", "KQLDashboardName": "KQLDashboardName"}),
         "New-FabricLakehouse": ("Get-FabricLakehouse", {"WorkspaceId": "WorkspaceId", "LakehouseName": "LakehouseName"}),
         "New-FabricNotebook": ("Get-FabricNotebook", {"WorkspaceId": "WorkspaceId", "NotebookName": "NotebookName"}),
         "New-FabricEnvironment": ("Get-FabricEnvironment", {"WorkspaceId": "WorkspaceId", "EnvironmentName": "EnvironmentName"}),
@@ -320,3 +322,52 @@ def test_validate_set_values_are_enforced_before_powershell_execution():
                 "NotebookFormat": "unsupported",
             },
         )
+
+
+def test_guarded_kql_database_create_requires_parent_and_valid_database_type():
+    create_database = next(item for item in combined_catalog() if item.command == "New-FabricKQLDatabase")
+    specs = {spec.name: spec for spec in create_database.parameter_specs}
+
+    assert specs["KQLDatabaseType"].allowed_values == ["ReadWrite", "Shortcut"]
+    command = build_guarded_write_command(
+        create_database,
+        {
+            "WorkspaceId": "ws-1",
+            "KQLDatabaseName": "wind_telemetry",
+            "KQLDatabaseType": "ReadWrite",
+            "parentEventhouseId": "eventhouse-1",
+        },
+        what_if=True,
+    )
+
+    assert "& 'New-FabricKQLDatabase'" in command
+    assert "-parentEventhouseId 'eventhouse-1'" in command
+    assert "-KQLDatabaseType 'ReadWrite'" in command
+    assert "-WhatIf" in command
+
+    with pytest.raises(ValueError, match="allowed values"):
+        build_guarded_write_command(
+            create_database,
+            {
+                "WorkspaceId": "ws-1",
+                "KQLDatabaseName": "wind_telemetry",
+                "KQLDatabaseType": "invalid",
+                "parentEventhouseId": "eventhouse-1",
+            },
+        )
+
+
+def test_guarded_kql_dashboard_create_renders_upstream_command():
+    create_dashboard = next(item for item in combined_catalog() if item.command == "New-FabricKQLDashboard")
+    command = build_guarded_write_command(
+        create_dashboard,
+        {
+            "WorkspaceId": "ws-1",
+            "KQLDashboardName": "wind_realtime_dashboard",
+        },
+        what_if=True,
+    )
+
+    assert "& 'New-FabricKQLDashboard'" in command
+    assert "-KQLDashboardName 'wind_realtime_dashboard'" in command
+    assert "-WhatIf" in command
