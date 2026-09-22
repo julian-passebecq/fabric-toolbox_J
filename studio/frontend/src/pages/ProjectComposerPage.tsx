@@ -4,6 +4,7 @@ import {
   Card,
   CardHeader,
   Divider,
+  Input,
   Spinner,
   Subtitle1,
   Text,
@@ -49,6 +50,7 @@ export function ProjectComposerPage({ connected, workspaceContext }: Props) {
   const [templates, setTemplates] = useState<ProjectTemplate[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [plan, setPlan] = useState<ProjectPlan | null>(null);
+  const [parameterValues, setParameterValues] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(true);
   const [planning, setPlanning] = useState(false);
   const [error, setError] = useState('');
@@ -75,6 +77,16 @@ export function ProjectComposerPage({ connected, workspaceContext }: Props) {
     [templates, selectedId],
   );
 
+  useEffect(() => {
+    if (!template) return;
+    const defaults: Record<string, unknown> = {};
+    for (const parameter of template.parameters) {
+      defaults[parameter.name] = parameter.default ?? '';
+    }
+    setParameterValues(defaults);
+    setPlan(null);
+  }, [template]);
+
   const planById = useMemo(() => {
     const map = new Map<string, ProjectPlanAction>();
     for (const action of plan?.actions ?? []) map.set(action.item_id, action);
@@ -91,7 +103,7 @@ export function ProjectComposerPage({ connected, workspaceContext }: Props) {
     setPlanning(true);
     setError('');
     try {
-      const result = await planProject(template.id, workspaceContext?.id);
+      const result = await planProject(template.id, workspaceContext?.id, parameterValues);
       setPlan(result);
     } catch (err) {
       setPlan(null);
@@ -106,9 +118,10 @@ export function ProjectComposerPage({ connected, workspaceContext }: Props) {
     const handoff = {
       project: template.id,
       workspace: workspaceContext ?? { name: template.workspace_name },
+      parameters: plan?.resolved_parameters ?? parameterValues,
       authoring_items: template.items
         .filter((item) => item.vscode_handoff)
-        .map((item) => ({ type: item.type, displayName: item.display_name })),
+        .map((item) => ({ type: item.type, displayName: item.display_name, settings: item.settings })),
     };
     await navigator.clipboard.writeText(JSON.stringify(handoff, null, 2));
   }
@@ -163,12 +176,43 @@ export function ProjectComposerPage({ connected, workspaceContext }: Props) {
         </div>
       </Card>
 
+      <section className={styles.section}>
+        <Subtitle1>Project parameters</Subtitle1>
+        <Text block className={styles.muted}>Values are used for planning and VS Code handoff. Secrets are redacted by the backend plan response.</Text>
+        <div className={styles.cards}>
+          {template.parameters.map((parameter) => (
+            <Card key={parameter.name}>
+              <CardHeader
+                header={<Subtitle1>{parameter.label}</Subtitle1>}
+                description={<Text>{parameter.description}</Text>}
+              />
+              <Input
+                type={parameter.secret ? 'password' : 'text'}
+                value={String(parameterValues[parameter.name] ?? '')}
+                onChange={(_, data) => setParameterValues((current) => ({ ...current, [parameter.name]: data.value }))}
+                placeholder={parameter.required ? 'Required' : 'Optional'}
+              />
+              <div className={styles.row}>
+                <Badge appearance={parameter.required ? 'tint' : 'outline'}>{parameter.required ? 'REQUIRED' : 'OPTIONAL'}</Badge>
+                {parameter.allowed_values.length > 0 && <Text size={200}>Allowed: {parameter.allowed_values.join(', ')}</Text>}
+              </div>
+            </Card>
+          ))}
+        </div>
+      </section>
+
       {!canLivePlan && (
         <div className={styles.warning}>
           <Text weight="semibold">Connect to the Fabric tenant before diffing the selected live workspace.</Text>
         </div>
       )}
       {error && <div className={styles.warning}><Text>{error}</Text></div>}
+
+      {plan && plan.missing_parameters.length > 0 && (
+        <div className={styles.warning}>
+          <Text weight="semibold">Missing required parameters: {plan.missing_parameters.join(', ')}</Text>
+        </div>
+      )}
 
       {plan && (
         <div className={styles.stats}>
