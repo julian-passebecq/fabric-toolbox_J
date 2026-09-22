@@ -102,6 +102,27 @@ Specialized tools keep their own authentication, dependency and output lifecycle
 - [x] lazy-loaded secondary UI modules and stable React/Fluent vendor chunking
 - [ ] optional update check against upstream Fabric Toolbox and Fabric REST specifications
 
+
+## Milestone 6 - declarative Project Composer
+
+- [x] reviewed project-template schema
+- [x] Foil'o Wind Energy RTI starter template
+- [x] live workspace inventory diff
+- [x] create / unchanged / conflict / unmanaged plan states
+- [x] preserve unmanaged items by default
+- [x] VS Code authoring handoff metadata
+- [x] Project Composer API and Fluent UI page
+- [ ] register guarded create operations for Eventhouse, KQL Database, KQL Queryset and KQL Dashboard
+- [ ] register Eventstream definition create/update flow
+- [ ] register Lakehouse, Environment, Notebook and Data Pipeline create/update flows
+- [ ] dependency-aware apply ordering and read-back verification
+- [ ] project manifest export/import
+- [ ] VS Code Fabric extension deep-link or workspace-folder handoff where supported
+- [ ] Foil'o live Oracle/Kafka endpoint parameter set
+- [ ] Foil'o Eventstream -> Eventhouse/KQL -> Lakehouse deployment acceptance test
+
+Project Composer is plan-only until the item-specific write surface has been reviewed. A template is not an execution allowlist.
+
 ## Next high-value pass
 
 - guarded Security Audit launcher plus report-bundle browser, preserving the upstream script and its permission boundary
