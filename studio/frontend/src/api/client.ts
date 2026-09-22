@@ -252,6 +252,28 @@ export type ProjectPlan = {
 };
 
 
+export type ProjectAcceptanceCheck = {
+  id: string;
+  label: string;
+  status: 'pass' | 'fail' | 'warning';
+  detail: string;
+  item_id?: string;
+  expected?: string;
+  actual?: string;
+};
+
+export type ProjectAcceptanceReport = {
+  template_id: string;
+  project_name: string;
+  workspace_id: string;
+  status: 'pass' | 'fail';
+  accepted: boolean;
+  checks: ProjectAcceptanceCheck[];
+  desired_eventstream_sha256?: string;
+  live_eventstream_sha256?: string;
+  definition_match?: boolean;
+};
+
 export type EventstreamDefinitionArtifact = {
   template_id: string;
   item_id: string;
@@ -392,6 +414,21 @@ export function getEventstreamDefinitionArtifact(
     {
       method: 'POST',
       body: JSON.stringify({ ...(workspaceId ? { workspace_id: workspaceId } : {}), parameters }),
+    },
+  );
+}
+
+
+export function runProjectAcceptance(
+  templateId: string,
+  workspaceId: string,
+  parameters: Record<string, unknown> = {},
+) {
+  return request<ProjectAcceptanceReport>(
+    `/api/projects/templates/${encodeURIComponent(templateId)}/acceptance`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ workspace_id: workspaceId, parameters }),
     },
   );
 }
