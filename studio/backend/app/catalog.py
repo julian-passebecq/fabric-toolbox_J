@@ -14,8 +14,9 @@ STATIC_CATALOG = STUDIO_DIR / "frontend" / "src" / "data" / "capabilities.json"
 PS_PUBLIC_ROOT = REPO_ROOT / "tools" / "MicrosoftFabricMgmt" / "source" / "Public"
 
 _FUNCTION_RE = re.compile(r"^\s*function\s+([A-Za-z0-9_-]+)", re.MULTILINE | re.IGNORECASE)
+_ATTRIBUTE_BLOCK_RE = r"""\[(?:[^\]'"\r\n]|'[^']*'|"[^"]*")*\]"""
 _PARAM_DECL_RE = re.compile(
-    r"(?P<attrs>\[Parameter(?:\([^\)]*\))?\]\s*(?:\[[^\]]+\]\s*)*)\$(?P<name>[A-Za-z_][A-Za-z0-9_]*)",
+    rf"(?P<attrs>\[Parameter(?:\([^\)]*\))?\]\s*(?:{_ATTRIBUTE_BLOCK_RE}\s*)*)\$(?P<name>[A-Za-z_][A-Za-z0-9_]*)",
     re.IGNORECASE,
 )
 _TYPE_RE = re.compile(
