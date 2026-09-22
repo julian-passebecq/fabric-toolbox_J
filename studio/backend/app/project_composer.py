@@ -16,6 +16,10 @@ from .models import (
     ProjectPlanAction,
     ProjectPlanRequest,
     ProjectTemplate,
+    ProjectWaveStageEntry,
+    ProjectWaveStageIssue,
+    ProjectWaveStageResult,
+    MutationArtifactRequest,
 )
 from .providers.fabric_rest import execute_rest_read
 from .providers.microsoftfabricmgmt import UnsafeOperation, runtime
@@ -288,6 +292,42 @@ def _reconciliation_for(
     )
 
 
+
+def _deployment_wave_map(template: ProjectTemplate) -> dict[str, int]:
+    by_id = {item.id: item for item in template.items}
+    cache: dict[str, int] = {}
+
+    def resolve(item_id: str, stack: tuple[str, ...] = ()) -> int:
+        if item_id in cache:
+            return cache[item_id]
+        if item_id in stack:
+            cycle = " -> ".join((*stack, item_id))
+            raise ValueError(f"Project template dependency cycle: {cycle}")
+
+        item = by_id.get(item_id)
+        if not item:
+            raise ValueError(f"Project template dependency not found: {item_id}")
+
+        if not item.depends_on:
+            wave = 1
+        else:
+            dependency_waves: list[int] = []
+            for dependency in item.depends_on:
+                if dependency not in by_id:
+                    raise ValueError(
+                        f"Project item {item.id} depends on unknown template item {dependency}"
+                    )
+                dependency_waves.append(resolve(dependency, (*stack, item_id)))
+            wave = max(dependency_waves) + 1
+
+        cache[item_id] = wave
+        return wave
+
+    for item_id in by_id:
+        resolve(item_id)
+    return cache
+
+
 def plan_project(template: ProjectTemplate, request: ProjectPlanRequest) -> ProjectPlan:
     resolved_parameters, missing_parameters = _resolve_parameters(template, request.parameters)
     current_items = request.current_items
@@ -335,6 +375,7 @@ def plan_project(template: ProjectTemplate, request: ProjectPlanRequest) -> Proj
         desired_status.append((desired, action, reason, exact))
 
     catalog_by_id = {item.id: item for item in combined_catalog()}
+    wave_by_id = _deployment_wave_map(template)
     actions: list[ProjectPlanAction] = []
     for desired, action, reason, existing_item in desired_status:
         capability_id, provisioning_parameters, provisioning_ready, provisioning_reason = _provisioning_for(
@@ -375,6 +416,7 @@ def plan_project(template: ProjectTemplate, request: ProjectPlanRequest) -> Proj
                 reconciliation_parameters=reconciliation_parameters,
                 reconciliation_ready=reconciliation_ready,
                 reconciliation_reason=reconciliation_reason,
+                deployment_wave=wave_by_id.get(desired.id),
             )
         )
 
@@ -397,6 +439,12 @@ def plan_project(template: ProjectTemplate, request: ProjectPlanRequest) -> Proj
 
     counts = Counter(action.action for action in actions)
     ready_count = sum(1 for action in actions if action.provisioning_ready)
+    blocking_waves = [
+        action.deployment_wave
+        for action in actions
+        if action.action in {"create", "conflict"} and action.deployment_wave is not None
+    ]
+    current_wave = min(blocking_waves) if blocking_waves else None
     return ProjectPlan(
         template_id=template.id,
         project_name=template.name,
@@ -408,6 +456,7 @@ def plan_project(template: ProjectTemplate, request: ProjectPlanRequest) -> Proj
         counts={key: counts.get(key, 0) for key in ("create", "unchanged", "conflict", "unmanaged")},
         resolved_parameters=resolved_parameters,
         missing_parameters=missing_parameters,
+        current_wave=current_wave,
         apply_supported=False,
         apply_note=(
             ("Missing required project parameters: " + ", ".join(missing_parameters) + ". ")
@@ -814,4 +863,177 @@ def accept_project(template: ProjectTemplate, request: ProjectPlanRequest) -> Pr
         desired_eventstream_sha256=desired_hash,
         live_eventstream_sha256=live_hash,
         definition_match=definition_match,
+    )
+
+
+def stage_project_wave(
+    template: ProjectTemplate,
+    request: ProjectPlanRequest,
+    mutation_broker=None,
+) -> ProjectWaveStageResult:
+    if not request.workspace_id:
+        raise ValueError("workspace_id is required to stage a deployment wave")
+
+    if mutation_broker is None:
+        from .mutations import broker as mutation_broker
+
+    current_items = request.current_items
+    if current_items is None:
+        current_items = _live_items(request.workspace_id)
+
+    snapshot = ProjectPlanRequest(
+        workspace_id=request.workspace_id,
+        current_items=current_items,
+        parameters=request.parameters,
+    )
+    plan = plan_project(template, snapshot)
+
+    if plan.missing_parameters:
+        return ProjectWaveStageResult(
+            template_id=template.id,
+            project_name=template.name,
+            workspace_id=request.workspace_id,
+            wave=plan.current_wave,
+            status="blocked",
+            issues=[
+                ProjectWaveStageIssue(
+                    item_id="project-parameters",
+                    display_name="Project parameters",
+                    detail="Missing required project parameters: " + ", ".join(plan.missing_parameters),
+                )
+            ],
+            note="Resolve project parameters before staging the current deployment wave.",
+        )
+
+    if plan.current_wave is None:
+        return ProjectWaveStageResult(
+            template_id=template.id,
+            project_name=template.name,
+            workspace_id=request.workspace_id,
+            status="complete",
+            note="No create/conflict deployment wave remains in the project plan.",
+        )
+
+    candidates = [
+        action
+        for action in plan.actions
+        if action.action == "create"
+        and action.deployment_wave == plan.current_wave
+        and action.provisioning_ready
+        and action.provisioning_capability_id
+    ]
+
+    if not candidates:
+        blockers = [
+            action
+            for action in plan.actions
+            if action.deployment_wave == plan.current_wave
+            and action.action in {"create", "conflict"}
+        ]
+        return ProjectWaveStageResult(
+            template_id=template.id,
+            project_name=template.name,
+            workspace_id=request.workspace_id,
+            wave=plan.current_wave,
+            status="blocked",
+            issues=[
+                ProjectWaveStageIssue(
+                    item_id=action.item_id,
+                    display_name=action.display_name,
+                    detail=(
+                        action.reason
+                        if action.action == "conflict"
+                        else action.provisioning_reason or action.reason
+                    ),
+                )
+                for action in blockers
+            ],
+            note=f"Deployment wave {plan.current_wave} has no dependency-ready create actions.",
+        )
+
+    catalog_by_id = {item.id: item for item in combined_catalog()}
+    staged: list[ProjectWaveStageEntry] = []
+    issues: list[ProjectWaveStageIssue] = []
+
+    for action in candidates:
+        capability = catalog_by_id.get(action.provisioning_capability_id or "")
+        if not capability:
+            issues.append(
+                ProjectWaveStageIssue(
+                    item_id=action.item_id,
+                    display_name=action.display_name,
+                    detail="Provisioning capability is missing from the current catalog.",
+                )
+            )
+            continue
+
+        artifacts: list[MutationArtifactRequest] = []
+        if action.item_type == "Eventstream":
+            artifact = build_eventstream_definition(template, snapshot)
+            if not artifact["ready"]:
+                issues.append(
+                    ProjectWaveStageIssue(
+                        item_id=action.item_id,
+                        display_name=action.display_name,
+                        detail="Eventstream definition is not ready: "
+                        + ", ".join(artifact["missing_requirements"]),
+                    )
+                )
+                continue
+            artifacts.append(
+                MutationArtifactRequest(
+                    parameter="EventstreamPathDefinition",
+                    filename=artifact["filename"],
+                    content=json.dumps(artifact["definition"], indent=2, sort_keys=True),
+                )
+            )
+
+        try:
+            mutation_plan = mutation_broker.create_plan(
+                capability,
+                action.provisioning_parameters,
+                artifacts=artifacts,
+            )
+            staged.append(
+                ProjectWaveStageEntry(
+                    item_id=action.item_id,
+                    display_name=action.display_name,
+                    item_type=action.item_type,
+                    deployment_wave=action.deployment_wave or plan.current_wave,
+                    capability_id=capability.id,
+                    plan_id=mutation_plan.plan_id,
+                    confirmation_text=mutation_plan.confirmation_text,
+                    artifact_sha256=[artifact.sha256 for artifact in mutation_plan.artifacts],
+                )
+            )
+        except (UnsafeOperation, ValueError, RuntimeError) as exc:
+            issues.append(
+                ProjectWaveStageIssue(
+                    item_id=action.item_id,
+                    display_name=action.display_name,
+                    detail=str(exc),
+                )
+            )
+
+    if staged and issues:
+        status = "partial"
+    elif staged:
+        status = "staged"
+    else:
+        status = "blocked"
+
+    return ProjectWaveStageResult(
+        template_id=template.id,
+        project_name=template.name,
+        workspace_id=request.workspace_id,
+        wave=plan.current_wave,
+        status=status,
+        staged=staged,
+        issues=issues,
+        note=(
+            f"Staged {len(staged)} guarded Change Plan(s) for deployment wave {plan.current_wave}. "
+            "Nothing has been executed; validate and approve each plan independently in Change Plans."
+            if staged
+            else f"Deployment wave {plan.current_wave} could not be staged."
+        ),
     )
