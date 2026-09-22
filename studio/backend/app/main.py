@@ -1,4 +1,7 @@
-from fastapi import FastAPI, HTTPException
+import io
+import zipfile
+
+from fastapi import FastAPI, HTTPException, Response
 
 from .activity import append_activity, read_activity
 from .catalog import combined_catalog
@@ -24,7 +27,7 @@ from .models import (
     SessionStatus,
 )
 from .mutations import broker
-from .project_composer import accept_project, build_eventstream_definition, build_project_item_definition_artifact, export_project_manifest, get_project_template, import_project_manifest, list_project_templates, plan_project
+from .project_composer import accept_project, build_eventstream_definition, build_project_item_definition_artifact, build_vscode_handoff_files, export_project_manifest, get_project_template, import_project_manifest, list_project_templates, plan_project
 from .providers.fabric_rest import build_rest_get_command, execute_rest_read
 from .providers.microsoftfabricmgmt import (
     ProviderUnavailable,
@@ -360,6 +363,56 @@ def project_manifest_import(manifest: ProjectManifest) -> ProjectManifestImportR
         }
     )
     return result
+
+
+@app.post("/api/projects/templates/{template_id}/vscode-handoff")
+def project_vscode_handoff(
+    template_id: str,
+    request: ProjectManifestExportRequest | None = None,
+) -> Response:
+    try:
+        template = get_project_template(template_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    try:
+        bundle = build_vscode_handoff_files(
+            template,
+            request or ProjectManifestExportRequest(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    buffer = io.BytesIO()
+    root = bundle["bundle_name"]
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for relative_path, content in bundle["files"].items():
+            archive.writestr(f"{root}/{relative_path}", content)
+
+    payload = buffer.getvalue()
+    append_activity(
+        {
+            "action": "project.vscode-handoff.export",
+            "template_id": bundle["template_id"],
+            "template_version": bundle["template_version"],
+            "template_sha256": bundle["template_sha256"],
+            "workspace_id": bundle["workspace_id"],
+            "workspace_name": bundle["workspace_name"],
+            "bundle_name": root,
+            "file_count": len(bundle["files"]),
+            "secret_parameters": bundle["secret_parameters"],
+            "size_bytes": len(payload),
+            "deep_link": False,
+        }
+    )
+    return Response(
+        content=payload,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{root}.zip"',
+            "X-Fabric-Studio-Bundle": root,
+        },
+    )
 
 
 @app.post("/api/projects/templates/{template_id}/plan", response_model=ProjectPlan)
