@@ -18,7 +18,7 @@ def test_foilo_template_covers_rti_and_engineering_items():
     assert "rti-kql-database" in eventstream.depends_on
     assert eventstream.vscode_handoff is True
     assert database.settings["parentEventhouseRef"] == "rti-eventhouse"
-    assert {"ingestion_mode", "kafka_topic", "kafka_bootstrap_servers", "turbine_id"}.issubset(parameter_names)
+    assert {"ingestion_mode", "kafka_topic", "kafka_bootstrap_servers", "kafka_password", "turbine_id"}.issubset(parameter_names)
 
 
 def test_templates_are_discoverable():
@@ -90,3 +90,46 @@ def test_unknown_project_parameter_is_rejected():
     template = get_project_template("foilo-wind-rti")
     with pytest.raises(ValueError, match="Unknown project parameters"):
         plan_project(template, ProjectPlanRequest(parameters={"not_registered": "x"}))
+
+
+def test_allowed_values_and_secret_redaction():
+    template = get_project_template("foilo-wind-rti")
+
+    with pytest.raises(ValueError, match="allowed values"):
+        plan_project(
+            template,
+            ProjectPlanRequest(parameters={"ingestion_mode": "unsupported-mode"}),
+        )
+
+    plan = plan_project(
+        template,
+        ProjectPlanRequest(parameters={"kafka_password": "top-secret"}),
+    )
+    assert plan.resolved_parameters["kafka_password"] == "***"
+
+
+def test_project_api_functions_expose_template_and_validate_parameters():
+    from fastapi import HTTPException
+    from app.main import project_plan as api_project_plan
+    from app.main import project_template as api_project_template
+    from app.main import project_templates as api_project_templates
+
+    assert any(item.id == "foilo-wind-rti" for item in api_project_templates())
+    assert api_project_template("foilo-wind-rti").id == "foilo-wind-rti"
+
+    plan = api_project_plan(
+        "foilo-wind-rti",
+        ProjectPlanRequest(current_items=[], parameters={"environment": "test"}),
+    )
+    assert plan.resolved_parameters["environment"] == "test"
+
+    with pytest.raises(HTTPException) as invalid:
+        api_project_plan(
+            "foilo-wind-rti",
+            ProjectPlanRequest(current_items=[], parameters={"environment": "invalid"}),
+        )
+    assert invalid.value.status_code == 400
+
+    with pytest.raises(HTTPException) as missing:
+        api_project_template("does-not-exist")
+    assert missing.value.status_code == 404
