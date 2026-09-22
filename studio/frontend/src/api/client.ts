@@ -230,6 +230,10 @@ export type ProjectPlanAction = {
   provisioning_parameters: Record<string, unknown>;
   provisioning_ready: boolean;
   provisioning_reason: string;
+  reconciliation_capability_id?: string;
+  reconciliation_parameters: Record<string, unknown>;
+  reconciliation_ready: boolean;
+  reconciliation_reason: string;
 };
 
 export type ProjectPlan = {
