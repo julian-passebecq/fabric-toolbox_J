@@ -115,10 +115,16 @@ export function ProjectComposerPage({ connected, workspaceContext }: Props) {
 
   async function copyVsCodeHandoff() {
     if (!template) return;
+    const safeParameters = Object.fromEntries(
+      template.parameters.map((parameter) => [
+        parameter.name,
+        parameter.secret && parameterValues[parameter.name] ? '***' : (plan?.resolved_parameters[parameter.name] ?? parameterValues[parameter.name]),
+      ]),
+    );
     const handoff = {
       project: template.id,
       workspace: workspaceContext ?? { name: template.workspace_name },
-      parameters: plan?.resolved_parameters ?? parameterValues,
+      parameters: safeParameters,
       authoring_items: template.items
         .filter((item) => item.vscode_handoff)
         .map((item) => ({ type: item.type, displayName: item.display_name, settings: item.settings })),
