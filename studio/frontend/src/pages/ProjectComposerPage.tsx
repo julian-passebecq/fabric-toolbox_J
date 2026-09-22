@@ -15,6 +15,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import {
   EventstreamDefinitionArtifact,
+  MutationArtifactInput,
   ProjectPlan,
   ProjectPlanAction,
   ProjectTemplate,
@@ -144,7 +145,7 @@ export function ProjectComposerPage({ connected, workspaceContext, onOpenChangeP
     try {
       for (const action of unstagedReadyCreates) {
         if (!action.provisioning_capability_id) continue;
-        let artifacts = [];
+        let artifacts: MutationArtifactInput[] = [];
         if (action.item_type === 'Eventstream') {
           const artifact = await getEventstreamDefinitionArtifact(
             template.id,
