@@ -20,7 +20,13 @@ from .models import (
     SessionStatus,
 )
 from .mutations import broker
-from .project_composer import build_eventstream_definition, get_project_template, list_project_templates, plan_project
+from .project_composer import (
+    build_eventstream_definition,
+    get_project_template,
+    inspect_eventstream_drift,
+    list_project_templates,
+    plan_project,
+)
 from .providers.fabric_rest import build_rest_get_command, execute_rest_read
 from .providers.microsoftfabricmgmt import (
     ProviderUnavailable,
@@ -363,6 +369,40 @@ def project_eventstream_artifact(template_id: str, request: ProjectPlanRequest |
         }
     )
     return artifact
+
+
+@app.post("/api/projects/templates/{template_id}/drift/eventstream")
+def project_eventstream_drift(template_id: str, request: ProjectPlanRequest | None = None) -> dict:
+    try:
+        template = get_project_template(template_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    try:
+        drift = inspect_eventstream_drift(template, request or ProjectPlanRequest())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except UnsafeOperation as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ProviderUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    append_activity(
+        {
+            "action": "project.drift.eventstream",
+            "template_id": template.id,
+            "workspace_id": drift.get("workspace_id"),
+            "eventstream_id": drift.get("eventstream_id"),
+            "ready": drift.get("ready"),
+            "in_sync": drift.get("in_sync"),
+            "difference_count": drift.get("difference_count", 0),
+            "desired_sha256": drift.get("desired_sha256"),
+            "live_sha256": drift.get("live_sha256"),
+        }
+    )
+    return drift
 
 
 @app.get("/api/activity")
