@@ -234,6 +234,7 @@ def _reconciliation_for(
     action: str,
     request: ProjectPlanRequest,
     existing_item: dict[str, Any] | None,
+    existing_by_template_id: dict[str, dict[str, Any]],
     catalog_by_id: dict[str, Any],
 ) -> tuple[str | None, dict[str, Any], bool, str]:
     if desired.type != "Eventstream":
@@ -252,6 +253,19 @@ def _reconciliation_for(
     eventstream_id = _actual_id(existing_item)
     if not eventstream_id:
         return capability_id, {}, False, "The existing Eventstream item ID could not be resolved."
+
+    missing_dependencies = [
+        dependency for dependency in desired.depends_on
+        if dependency not in existing_by_template_id
+    ]
+    if missing_dependencies:
+        return (
+            capability_id,
+            {},
+            False,
+            "Definition reconciliation requires the declared Fabric dependencies first: "
+            + ", ".join(missing_dependencies),
+        )
 
     return (
         capability_id,
@@ -330,6 +344,7 @@ def plan_project(template: ProjectTemplate, request: ProjectPlanRequest) -> Proj
             action,
             request,
             existing_item,
+            existing_by_template_id,
             catalog_by_id,
         )
         actions.append(
