@@ -2,8 +2,9 @@
 
 ## 2026-10-05 release work
 
-Single successor is preparing a 0.8 read-only prerelease on
-`codex/release-0.8-readonly`. Production writes remain disabled; original S01
+Single successor published `studio-v0.8.0-rc.1`, a read-only prerelease at
+`cc88570d6dd0e8371853b8f9a1088e2dda07b396`, from `codex/release-0.8-readonly`.
+Windows/Linux CI passed on that exact candidate. No work remains running. Production writes remain disabled; original S01
 write requirements and later proposed sprints remain unaccepted/deferred.
 Current evidence and resumable next action:
 [release checkpoint](reports/2026-10-05-release-0.8.md).
