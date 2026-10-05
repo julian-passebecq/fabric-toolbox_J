@@ -1,5 +1,16 @@
 # Current delivery state
 
+## 2026-10-05 main integration
+
+At the user's explicit request, the published read-only candidate and release
+evidence were fast-forwarded into `main`, with French description/usage docs
+at `studio/MODE_EMPLOI.md` and links from both READMEs. Integration commit:
+`2e66a09e33bd19ec6e2d5bd967a56810f0e8e42e`. The release tag remains fixed at
+the previously validated candidate. Studio CI now includes pushes to `main`;
+all nine targeted launcher/workflow tests passed before pushing. The GitHub
+release description now includes the French guide. Production writes remain
+disabled, and no future sprint or live tenant operation was executed.
+
 ## 2026-10-05 release work
 
 Single successor published `studio-v0.8.0-rc.1`, a read-only prerelease at
