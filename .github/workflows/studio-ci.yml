@@ -2,7 +2,7 @@ name: Fabric Ops Studio CI
 
 on:
   push:
-    branches: [fabric-ops-studio-v1, 'codex/**']
+    branches: [main, fabric-ops-studio-v1, 'codex/**']
     paths:
       - 'studio/**'
       - 'tools/MicrosoftFabricMgmt/**'

@@ -4,6 +4,17 @@
 
 # Welcome to the Fabric Toolbox
 
+## Fabric Ops Studio — console locale Windows
+
+Ce fork inclut **Fabric Ops Studio 0.8.0-rc.1**, une console web locale pour
+consulter Microsoft Fabric : inventaires, items, runs, schedules, état Git,
+exports JSON/CSV et diagnostics. Cette préversion fonctionne en lecture seule ;
+les écritures sont désactivées.
+
+- [Description, installation et mode d'emploi](./studio/MODE_EMPLOI.md)
+- [Release publiée](https://github.com/julian-passebecq/fabric-toolbox_J/releases/tag/studio-v0.8.0-rc.1)
+- [Documentation technique Studio](./studio/README.md)
+
 Fabric toolbox is a repository of tools, accelerators, scripts, and samples to help you work with Microsoft Fabric. This repository is brought to you by the Fabric Customer Advisory Team (CAT) and will continue to grow as we develop new tools and accelerators.  
 
 These assets should be treated as examples that you can use to create the solutions that are appropriate for your use case. If you have any issues, please use the [issues](https://github.com/microsoft/fabric-toolbox/issues) tab of this repository and we will work to address issues on a best effort basis. 

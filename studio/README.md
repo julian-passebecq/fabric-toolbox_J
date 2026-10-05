@@ -1,5 +1,7 @@
 # Fabric Ops Studio
 
+[Description et mode d'emploi en français](MODE_EMPLOI.md)
+
 Fabric Ops Studio is a management and operations UI layered on top of the existing Microsoft Fabric Toolbox.
 
 ## Product direction (some features remain future work)
