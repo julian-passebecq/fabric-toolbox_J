@@ -86,7 +86,7 @@ export type MutationExecutionResponse = {
 };
 
 export type SessionStatus = {
-  mode: 'guarded-writes';
+  mode: 'read-only' | 'guarded-writes';
   transport: string;
   feature_provider: string;
   connected: boolean;

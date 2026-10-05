@@ -3,7 +3,9 @@ from app.models import Capability
 from app.specialized_tools import list_specialized_tools
 
 
-def test_diagnostics_returns_runtime_catalog_and_compatibility_shape():
+def test_diagnostics_returns_runtime_catalog_and_compatibility_shape(monkeypatch):
+    from app import admission
+    monkeypatch.setattr(admission, 'WRITE_ADMISSION_SUSPENDED', True)
     diagnostics = collect_diagnostics()
 
     assert diagnostics["status"] in {"ready", "degraded"}
@@ -11,7 +13,7 @@ def test_diagnostics_returns_runtime_catalog_and_compatibility_shape():
     assert diagnostics["catalog"]["total"] > 0
     assert "MicrosoftFabricMgmt" in diagnostics["catalog"]["providers"]
     assert "read" in diagnostics["catalog"]["risks"]
-    assert diagnostics["session"]["mode"] == "guarded-writes"
+    assert diagnostics["session"]["mode"] == "read-only"
     assert isinstance(diagnostics["session"]["connected"], bool)
     assert diagnostics["checks"]
     assert all({"name", "ok", "required", "detail"}.issubset(check) for check in diagnostics["checks"])

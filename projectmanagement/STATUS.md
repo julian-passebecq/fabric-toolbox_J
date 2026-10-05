@@ -1,5 +1,15 @@
 # Current delivery state
 
+## 2026-10-05 release work
+
+Single successor is preparing a 0.8 read-only prerelease on
+`codex/release-0.8-readonly`. Production writes remain disabled; original S01
+write requirements and later proposed sprints remain unaccepted/deferred.
+Current evidence and resumable next action:
+[release checkpoint](reports/2026-10-05-release-0.8.md).
+
+Historical entries below are preserved as provenance.
+
 ## 2026-09-11 preservation update
 
 Work is handed to a single Pro AI on `codex/pro-ai-handover-2026-09-11`.

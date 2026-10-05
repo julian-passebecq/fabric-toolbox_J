@@ -7,7 +7,9 @@
 - Immutable plans, atomic claims and explicit uncertain/unverified outcomes.
 - Per-launch local client boundary and bounded structured activity history.
 - Context-safe UI, component/browser fixtures, locked installs and owned cleanup.
-- Workspace writes suspended: upstream retry/204 defects require lead review.
+- Production writes disabled; upstream retry/204 defects remain deferred.
+- Health, session, diagnostics and Overview report the read-only execution boundary.
+- Restore locked Rollup/esbuild native dependencies for reproducible Linux and Windows CI.
 
 Local evidence does not imply tenant validation or sprint acceptance.
 

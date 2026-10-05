@@ -32,7 +32,7 @@ from .boundary import local_boundary
 app = FastAPI(
     title="Fabric Ops Studio API",
     version="0.8.0",
-    description="Fabric operations layer with read execution and explicitly allowlisted guarded writes.",
+    description="Fabric operations layer with reviewed read execution. Production writes are disabled.",
 )
 app.middleware('http')(local_boundary)
 
@@ -70,7 +70,7 @@ def _execute_read(item: Capability, parameters: dict, expected=None) -> dict:
 
 @app.get("/api/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "mode": "guarded-writes"}
+    return {"status": "ok", "mode": runtime.status().mode}
 
 
 @app.get("/api/session", response_model=SessionStatus)

@@ -122,7 +122,7 @@ class MutationExecutionResult(BaseModel):
 
 
 class SessionStatus(BaseModel):
-    mode: Literal["guarded-writes"] = "guarded-writes"
+    mode: Literal["read-only", "guarded-writes"] = "read-only"
     transport: str = "MicrosoftFabricMgmtMCPServer/core/powershell_session.py"
     feature_provider: str = "MicrosoftFabricMgmt"
     connected: bool = False

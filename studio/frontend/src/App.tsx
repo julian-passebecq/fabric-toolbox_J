@@ -279,14 +279,14 @@ export function App() {
         <div className={styles.hero}>
           <div>
             <Title1>Overview</Title1>
-            <Text block>Operational control plane for Microsoft Fabric with read execution and tightly allowlisted guarded writes.</Text>
+            <Text block>Operational control plane for Microsoft Fabric. This release executes reviewed reads; production writes are disabled.</Text>
           </div>
         </div>
         <div className={styles.stats}>
           {[
             ['Catalog capabilities', String(catalog.length)],
             ['Guarded writes', String(guardedWriteCount)],
-            ['Execution mode', 'Read + guarded'],
+            ['Execution mode', guardedWriteCount ? 'Read + guarded' : 'Read-only'],
             ['Workspace context', workspaceContext?.name ?? 'None'],
             ['Item context', itemContext?.name ?? 'None'],
           ].map(([label, value]) => (
@@ -297,7 +297,7 @@ export function App() {
           ))}
         </div>
         <div className={styles.cards}>
-          <Card><CardHeader header={<Subtitle1>Workspace inventory & changes</Subtitle1>} description="Inventory workspaces and use guarded plans for the explicitly allowlisted create/update operations." /><Button onClick={() => setSection('Workspaces')}>Open</Button></Card>
+          <Card><CardHeader header={<Subtitle1>Workspace inventory & changes</Subtitle1>} description="Inspect workspace inventory. Workspace creation and updates are disabled in this release." /><Button onClick={() => setSection('Workspaces')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Change Plans</Subtitle1>} description="Review tenant-bound, expiring, single-use mutation plans created in the current backend session." /><Button onClick={() => setSection('Change Plans')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Item explorer</Subtitle1>} description="Select an item once and inherit its workspace/item IDs across detail, connection, job and schedule operations." /><Button onClick={() => setSection('Items')}>Open</Button></Card>
           <Card><CardHeader header={<Subtitle1>Runs & schedules</Subtitle1>} description="Inspect item job instances and schedules with selected workspace/item context prefilled." /><Button onClick={() => setSection('Runs & Schedules')}>Open</Button></Card>

@@ -37,9 +37,10 @@ The following are deliberately excluded from the Studio product surface:
 
 Reports and semantic models may still appear in inventory, lineage, permissions, Git, deployment and operational views because they are Fabric items. The Studio does not edit their analytical content.
 
-## Current execution boundary (S01 candidate)
+## Current execution boundary (0.8 read-only release candidate)
 
-S01 is awaiting a tech-lead decision, not accepted or tenant-validated.
+The 0.8 release candidate is a read-only milestone. Live tenant validation has not been performed.
+The write-dependent S01 requirements remain deferred and production writes stay disabled.
 Workspace create/update are **blocked**: the upstream API helper retries uncertain
 POST/PATCH responses and rejects HTTP 204. See the developer handoff under
 `projectmanagement/reports/S01-development-handoff.md` for the reproduced defect
@@ -110,7 +111,7 @@ A feature record should make it possible to answer:
 5. Open **Items**. The selected workspace ID is injected automatically; select **Use item** once to establish item context.
 6. Item details, connections, runs and schedules inherit `workspaceId` and `itemId`. Changing workspace invalidates the selected item so an item ID cannot leak across workspace context.
 7. Operation pages show inherited parameters explicitly and identify mandatory parameters that still need operator input, such as `jobType`.
-8. Preview generated PowerShell/REST execution when desired. Reviewed read operations can execute directly; workspace writes are currently blocked pending the lead decision.
+8. Preview generated PowerShell/REST execution when desired. Reviewed read operations can execute directly; workspace writes are disabled in this release.
 9. Inspect results as a sortable/filterable table or raw JSON. Export JSON or CSV as appropriate.
 10. Use **Change Plans**, **Activity Log**, **Sources** and **Diagnostics** to inspect approvals, execution history, provenance and runtime/compatibility health.
 

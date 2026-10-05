@@ -13,6 +13,7 @@ from typing import Any
 
 from ..models import Capability, SessionStatus
 from ..contracts import validate_parameters
+from .. import admission
 from ..admission import require_admission, source_hash
 from .outcomes import normalize, wrap_invocation, OutcomeUnknown
 from .session_extension import bounded_session_type
@@ -196,7 +197,7 @@ class MicrosoftFabricMgmtRuntime:
                 self._connected = False
                 self._tenant_id = None
                 self._generation = str(uuid.uuid4())
-            return SessionStatus(connected=self._connected, tenant_id=self._tenant_id, generation=self._generation)
+            return SessionStatus(mode="read-only" if admission.WRITE_ADMISSION_SUSPENDED else "guarded-writes", connected=self._connected, tenant_id=self._tenant_id, generation=self._generation)
 
     @contextmanager
     def dispatch(self, expected: SessionStatus, before_dispatch=None):

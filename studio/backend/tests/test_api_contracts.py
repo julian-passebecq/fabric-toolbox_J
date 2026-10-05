@@ -87,3 +87,22 @@ def test_unknown_command_capacity_and_stale_client_generation_do_not_dispatch(ap
     client.headers['X-Studio-Session']='old'
     assert client.post('/api/capabilities/ps-workspace-get-fabricworkspace/execute').status_code==409
     assert calls==['connect']
+
+
+def test_read_only_release_rejects_write_routes_before_provider_dispatch(api, monkeypatch):
+    from app import admission
+    from app.catalog import combined_catalog as production_catalog
+    client, runtime, calls, _, _ = api
+    connect(api)
+    monkeypatch.setattr(admission, 'WRITE_ADMISSION_SUSPENDED', True)
+    monkeypatch.setattr(main, 'combined_catalog', production_catalog)
+    assert client.get('/api/health').json()['mode'] == 'read-only'
+    assert client.get('/api/session').json()['mode'] == 'read-only'
+    catalog = client.get('/api/capabilities').json()
+    assert not any(c['execution_policy'] == 'guarded-write' for c in catalog)
+    for operation in ('new', 'update'):
+        path = f'/api/capabilities/ps-workspace-{operation}-fabricworkspace'
+        assert client.post(path + '/preview', json={'parameters': {}}).json()['executable'] is False
+        assert client.post(path + '/execute', json={'parameters': {}}).status_code == 400
+        assert client.post(path + '/mutations/plan', json={'parameters': {}}).status_code == 400
+    assert calls == ['connect']

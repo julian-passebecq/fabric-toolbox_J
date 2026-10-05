@@ -6,6 +6,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+from . import admission
 from .catalog import combined_catalog
 from .contracts import parse_endpoint
 from .providers.microsoftfabricmgmt import REPO_ROOT, UPSTREAM_SESSION_PATH, runtime
@@ -136,9 +137,9 @@ def collect_diagnostics() -> dict:
             str(built_manifests[-1]) if built_manifests else "No built MicrosoftFabricMgmt.psd1 found",
         ),
         _check(
-            "Guarded write allowlist",
-            bool(guarded) and len(guarded) == len(guarded_whatif),
-            f"{len(guarded)} guarded capabilities; {len(guarded_whatif)} expose upstream -WhatIf validation",
+            "Execution boundary",
+            not guarded if admission.WRITE_ADMISSION_SUSPENDED else bool(guarded) and len(guarded) == len(guarded_whatif),
+            "Read-only release; production writes are disabled" if admission.WRITE_ADMISSION_SUSPENDED else f"{len(guarded)} guarded capabilities; {len(guarded_whatif)} expose upstream -WhatIf validation",
         ),
         _check(
             "Capability compatibility",
