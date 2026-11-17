@@ -1,20 +1,13 @@
-# Fabric Ops Studio coordination
+# Fabric Ops Studio on fabric-toolbox_J
 
-2026-09-11 takeover: read `handover/README.md` first. The user has retired the
-multi-agent workflow for cost reasons and wants a single Pro AI successor.
-Historical role prompts remain reference material, not required agent dispatch.
-Existing sprint scope and execution safety limits remain in force.
+A fork of the Microsoft Fabric Toolbox. Our own product is Fabric Ops Studio in `studio/` (backend plus a React frontend), a management and operations UI over the Toolbox. Start with `studio/README.md` and `projectmanagement/STATUS.md`; `handover/` and the role prompts in `projectmanagement/prompts/` are history.
 
-For work on Fabric Ops Studio (`studio/`), its CI, or project planning, start with
-`projectmanagement/README.md` and `projectmanagement/STATUS.md`. They identify the
-active sprint, role instructions, architecture, tests, and handoff state.
+## Build and test
+- `cd studio && npm ci`, then the component tests, build and `npm run test:e2e -w frontend`; the backend steps are in `.github/workflows/studio-ci.yml`.
+- CI: GitHub Actions `studio-ci.yml` (public repo). No GitLab mirror.
 
-The user chooses the role: tech lead, medium development model, or light test
-model. Follow that role's prompt in `projectmanagement/prompts/`. A normal
-development request does not authorize executing future, unapproved sprints.
-Complete all passes of the active approved sprint without requesting a new
-prompt at each pass. Keep a resumable checkpoint if interrupted.
+## Guidelines
+- Keep the upstream Toolbox samples and tools separate from Studio code, so merges from upstream stay clean.
+- Studio talks to real Fabric tenants: no live tenant write, paid resource or stored credential without the owner asking for it.
 
-Keep upstream Toolbox implementations separate from Studio orchestration.
-These coordination instructions do not impose Studio's backlog on unrelated
-Toolbox samples or tools. Existing user instructions take precedence.
+How work flows: the fleet guideline every session loads (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`). CI recipe and runners: datapass-fleet-facade `AGENTS.md`.
